@@ -1,11 +1,11 @@
 {
-  "version": "1.0.2",
+  "version": "2.0.0",
   "name": "Weft Chronicle",
   "identifier": "weft_chronicle",
   "author": "decimal968",
   "github": "https://github.com/decimal968/weft-chronicle",
   "homepage": "https://github.com/decimal968/weft-chronicle",
-  "description": "Deterministic RPG System Window, Inventory, Quests, World State & NPC Tracker, and fair RNG Dice Roller built for Lumiverse & Weft presets.",
+  "description": "Authentic Weft litRPG System Window, Story Tracker (Bond/Spark/Heat, Thoughts, Secrets, Arc/Phase), Inventory, Quests & Fair Real-RNG d20 Dice — with independent module toggles, optional inline chat cards, dedicated Settings, sidecar LLM auto-sync, and swipe/delete undo.",
   "permissions": [
     "interceptor",
     "generation",

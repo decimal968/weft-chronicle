@@ -1,3 +1,5 @@
+"use strict";
+
 // src/engine.ts
 var STAT_KEYS = ["str", "dex", "int", "cha", "con", "wis"];
 var DEFAULT_STAT_LABELS = {
@@ -66,18 +68,33 @@ function recomputeSheetPools(sheet, opts = {}) {
   }
   return sheet;
 }
+function createDefaultModules() {
+  return { system: true, tracker: true, dice: true };
+}
 function createDefaultSettings() {
   return {
     enabledByDefault: true,
+    defaultModules: createDefaultModules(),
     injectPrompt: true,
     autoSync: true,
     sidecarConnectionId: "",
     theme: "sakura",
+    systemTheme: "follow",
     allocMode: "player",
     trackXp: true,
     includeWorldInPrompt: true,
     includeSheetInPrompt: true,
     includeRollsInPrompt: true,
+    showInlineSystem: true,
+    showInlineTracker: true,
+    showInlineNotices: true,
+    showInlineDice: true,
+    inlineStartsOpen: false,
+    trackerShowBond: true,
+    trackerShowSpark: true,
+    trackerShowHeat: true,
+    trackerShowThought: true,
+    trackerShowSecret: true,
     maxHistoryRolls: 30
   };
 }
@@ -128,20 +145,42 @@ function createDefaultWorld() {
     time: "Day 1",
     weather: "",
     mood: "",
+    arc: "Opening",
+    phase: "Setup",
     dayCount: 1,
     npcs: [],
     threads: [],
     notes: ""
   };
 }
-function createDefaultChatData(chatId, enabled = true, userName = "Survivor") {
+function normalizeChatData(data, defaultModules = createDefaultModules()) {
+  if (!data.modules) {
+    data.modules = { ...defaultModules };
+  }
+  if (!Array.isArray(data.notices)) data.notices = [];
+  if (!Array.isArray(data.rolls)) data.rolls = [];
+  if (!data.snapshots) data.snapshots = {};
+  if (typeof data.world.arc !== "string") data.world.arc = "Opening";
+  if (typeof data.world.phase !== "string") data.world.phase = "Setup";
+  for (const n of data.world.npcs) {
+    if (typeof n.mood !== "string") n.mood = n.attitude || "Wary";
+    if (typeof n.bond !== "number") n.bond = clamp(Math.round((n.relationship + 100) / 2), 0, 100);
+    if (typeof n.spark !== "number") n.spark = 15;
+    if (typeof n.heat !== "number") n.heat = 15;
+  }
+  recomputeSheetPools(data.sheet);
+  return data;
+}
+function createDefaultChatData(chatId, enabled = true, userName = "Survivor", modules = createDefaultModules()) {
   return {
     chatId,
     initialized: false,
     enabled,
+    modules: { ...modules },
     sheet: createDefaultSheet(userName),
     world: createDefaultWorld(),
     rolls: [],
+    notices: [],
     snapshots: {},
     lastSyncedKey: null,
     updatedAt: Date.now()
@@ -295,6 +334,7 @@ function performDiceRoll(sheet, opts) {
   };
 }
 function applyDelta(data, delta, settings) {
+  normalizeChatData(data);
   const sheet = data.sheet;
   const world = data.world;
   const oldLevel = sheet.level;
@@ -302,7 +342,10 @@ function applyDelta(data, delta, settings) {
   let ptsGained = 0;
   let xpGained = 0;
   const notes = [];
-  const sd = delta.sheet;
+  const turnNotices = [];
+  const changeLines = [];
+  const wasInitialized = data.initialized;
+  const sd = data.modules.system ? delta.sheet : void 0;
   if (sd) {
     if (typeof sd.name === "string" && sd.name.trim()) sheet.name = sd.name.trim();
     if (typeof sd.race === "string") sheet.race = sd.race.trim();
@@ -329,13 +372,14 @@ function applyDelta(data, delta, settings) {
       statsChanged = true;
     }
     if (statsChanged) {
-      recomputeSheetPools(sheet, { fillToMax: !data.initialized });
+      recomputeSheetPools(sheet, { fillToMax: !wasInitialized });
     }
     if (sd.rest === "long") {
       sheet.sp = sheet.spMax;
       if (sheet.useMp) sheet.mp = sheet.mpMax;
       sheet.hp = clamp(sheet.hp + Math.ceil(sheet.hpMax * 0.35), 0, sheet.hpMax);
       notes.push("Long rest");
+      changeLines.push("Restored stamina and recovered 35% HP from a long rest.");
     } else if (sd.rest === "short") {
       sheet.sp = clamp(sheet.sp + Math.ceil(sheet.spMax * 0.5), 0, sheet.spMax);
       if (sheet.useMp) sheet.mp = clamp(sheet.mp + Math.ceil(sheet.mpMax * 0.5), 0, sheet.mpMax);
@@ -344,6 +388,7 @@ function applyDelta(data, delta, settings) {
     if (typeof sd.hpDelta === "number" && sd.hpDelta !== 0) {
       sheet.hp = clamp(sheet.hp + sd.hpDelta, 0, sheet.hpMax);
       notes.push(`HP ${sd.hpDelta > 0 ? "+" : ""}${sd.hpDelta}`);
+      changeLines.push(`HP ${sd.hpDelta > 0 ? "+" : ""}${sd.hpDelta} (${sheet.hp}/${sheet.hpMax})`);
     }
     if (typeof sd.spDelta === "number" && sd.spDelta !== 0) {
       sheet.sp = clamp(sheet.sp + sd.spDelta, 0, sheet.spMax);
@@ -358,6 +403,7 @@ function applyDelta(data, delta, settings) {
       sheet.pts += bonus;
       ptsGained += bonus;
       notes.push(`+${bonus} pts`);
+      changeLines.push(`+${bonus} Bonus Attribute Points`);
     }
     if (settings.trackXp && typeof sd.xpGain === "number" && sd.xpGain > 0) {
       xpGained = Math.floor(sd.xpGain);
@@ -377,12 +423,24 @@ function applyDelta(data, delta, settings) {
         }
       }
       if (levelsGained > 0) {
-        if (settings.allocMode === "auto") {
-          autoAllocateAllPoints(sheet);
-        }
+        const autoSummary = settings.allocMode === "auto" ? autoAllocateAllPoints(sheet) : "";
         notes.push(`LEVEL UP \u2192 Lv ${sheet.level}`);
+        turnNotices.push({
+          id: makeId("ntc"),
+          timestamp: Date.now(),
+          kind: "levelup",
+          title: "LEVEL UP",
+          lines: [
+            `${sheet.name} reached Level ${sheet.level} (was Lv ${oldLevel}).`,
+            settings.allocMode === "auto" ? autoSummary : `+${ptsGained} Attribute Points ready to allocate.`,
+            `Pools expanded & recovered +25% (HP ${sheet.hp}/${sheet.hpMax}, SP ${sheet.sp}/${sheet.spMax}).`
+          ]
+        });
+      } else {
+        changeLines.push(`+${xpGained} XP (${sheet.xp}/${sheet.xpNext})`);
       }
     }
+    const addedItemNames = [];
     if (Array.isArray(sd.itemsAdded)) {
       for (const it of sd.itemsAdded) {
         if (!it || !it.name?.trim()) continue;
@@ -401,7 +459,17 @@ function applyDelta(data, delta, settings) {
         } else {
           addItemToBag(sheet, entry);
         }
+        addedItemNames.push(`${entry.name}${entry.qty > 1 ? ` \xD7${entry.qty}` : ""}`);
       }
+    }
+    if (wasInitialized && addedItemNames.length > 0) {
+      turnNotices.push({
+        id: makeId("ntc"),
+        timestamp: Date.now(),
+        kind: "item",
+        title: "ITEM ACQUIRED",
+        lines: addedItemNames.map((n) => `Obtained ${n}`)
+      });
     }
     if (Array.isArray(sd.itemsRemoved)) {
       for (const rm of sd.itemsRemoved) {
@@ -412,11 +480,8 @@ function applyDelta(data, delta, settings) {
     if (sd.tickEffects) {
       const remaining = [];
       for (const ef of sheet.effects) {
-        if (ef.duration === null) {
-          remaining.push(ef);
-        } else if (ef.duration > 1) {
-          remaining.push({ ...ef, duration: ef.duration - 1 });
-        }
+        if (ef.duration === null) remaining.push(ef);
+        else if (ef.duration > 1) remaining.push({ ...ef, duration: ef.duration - 1 });
       }
       sheet.effects = remaining;
     }
@@ -439,9 +504,13 @@ function applyDelta(data, delta, settings) {
             duration: ef.duration ?? null,
             note: ef.note || ""
           });
+          if (wasInitialized) {
+            changeLines.push(`Condition gained: ${ef.name.trim()}`);
+          }
         }
       }
     }
+    const newSkills = [];
     if (Array.isArray(sd.skillsAdded)) {
       for (const sk of sd.skillsAdded) {
         if (!sk || !sk.name?.trim()) continue;
@@ -453,14 +522,26 @@ function applyDelta(data, delta, settings) {
             cost: sk.cost || "",
             note: sk.note || ""
           });
+          newSkills.push(sk.name.trim());
         }
       }
     }
+    if (wasInitialized && newSkills.length > 0) {
+      turnNotices.push({
+        id: makeId("ntc"),
+        timestamp: Date.now(),
+        kind: "skill",
+        title: "SKILL UNLOCKED",
+        lines: newSkills
+      });
+    }
+    const questNoticeLines = [];
     if (Array.isArray(sd.questsUpserted)) {
       for (const q of sd.questsUpserted) {
         if (!q || !q.title?.trim()) continue;
         const existing = sheet.quests.find((x) => x.title.toLowerCase() === q.title.trim().toLowerCase());
         if (existing) {
+          const prevStatus = existing.status;
           if (q.status) existing.status = q.status;
           if (q.kind) existing.kind = q.kind;
           if (q.reward !== void 0) existing.reward = q.reward;
@@ -472,6 +553,9 @@ function applyDelta(data, delta, settings) {
               done: Boolean(o.done),
               progress: o.progress
             }));
+          }
+          if (wasInitialized && q.status && q.status !== prevStatus) {
+            questNoticeLines.push(`${existing.title} \u2192 ${q.status.toUpperCase()}`);
           }
         } else {
           sheet.quests.push({
@@ -488,6 +572,9 @@ function applyDelta(data, delta, settings) {
             reward: q.reward || "",
             penalty: q.penalty || ""
           });
+          if (wasInitialized) {
+            questNoticeLines.push(`New Quest: ${q.title.trim()}`);
+          }
         }
       }
       const rankStatus = (q) => {
@@ -501,18 +588,38 @@ function applyDelta(data, delta, settings) {
       const trimmedFinished = finished.slice(-3);
       sheet.quests = [...open, ...trimmedFinished].sort((a, b) => rankStatus(a) - rankStatus(b)).slice(0, 8);
     }
+    if (questNoticeLines.length > 0) {
+      turnNotices.push({
+        id: makeId("ntc"),
+        timestamp: Date.now(),
+        kind: "quest",
+        title: "QUEST UPDATED",
+        lines: questNoticeLines
+      });
+    }
+    if (wasInitialized && turnNotices.length === 0 && changeLines.length > 0) {
+      turnNotices.push({
+        id: makeId("ntc"),
+        timestamp: Date.now(),
+        kind: sd.hpDelta && sd.hpDelta <= -10 ? "warn" : "change",
+        title: sd.hpDelta && sd.hpDelta <= -10 ? "WARNING" : "NOTIFICATION",
+        lines: changeLines
+      });
+    }
     if (typeof sd.logSummary === "string" && sd.logSummary.trim()) {
       sheet.lastLog = sd.logSummary.trim();
     } else if (notes.length > 0) {
       sheet.lastLog = notes.join(" \xB7 ");
     }
   }
-  const wd = delta.world;
+  const wd = data.modules.tracker ? delta.world : void 0;
   if (wd) {
     if (typeof wd.location === "string" && wd.location.trim()) world.location = wd.location.trim();
     if (typeof wd.time === "string" && wd.time.trim()) world.time = wd.time.trim();
     if (typeof wd.weather === "string") world.weather = wd.weather.trim();
     if (typeof wd.mood === "string") world.mood = wd.mood.trim();
+    if (typeof wd.arc === "string" && wd.arc.trim()) world.arc = wd.arc.trim();
+    if (typeof wd.phase === "string" && wd.phase.trim()) world.phase = wd.phase.trim();
     if (typeof wd.dayDelta === "number" && wd.dayDelta > 0) {
       world.dayCount = Math.max(1, world.dayCount + Math.floor(wd.dayDelta));
     }
@@ -525,23 +632,42 @@ function applyDelta(data, delta, settings) {
           if (typeof n.role === "string" && n.role.trim()) existing.role = n.role.trim();
           if (typeof n.present === "boolean") existing.present = n.present;
           if (typeof n.location === "string" && n.location.trim()) existing.location = n.location.trim();
+          if (typeof n.mood === "string" && n.mood.trim()) existing.mood = n.mood.trim();
           if (typeof n.attitude === "string" && n.attitude.trim()) existing.attitude = n.attitude.trim();
-          if (typeof n.relSet === "number") existing.relationship = clamp(n.relSet, -100, 100);
-          else if (typeof n.relDelta === "number") {
+          if (typeof n.bondSet === "number") existing.bond = clamp(n.bondSet, 0, 100);
+          else if (typeof n.bondDelta === "number") existing.bond = clamp(existing.bond + n.bondDelta, 0, 100);
+          else if (typeof n.relSet === "number") {
+            existing.relationship = clamp(n.relSet, -100, 100);
+            existing.bond = clamp(Math.round((existing.relationship + 100) / 2), 0, 100);
+          } else if (typeof n.relDelta === "number") {
             existing.relationship = clamp(existing.relationship + n.relDelta, -100, 100);
+            existing.bond = clamp(existing.bond + Math.round(n.relDelta / 2), 0, 100);
           }
+          if (typeof n.bondSet === "number" || typeof n.bondDelta === "number") {
+            existing.relationship = clamp(existing.bond * 2 - 100, -100, 100);
+          }
+          if (typeof n.sparkSet === "number") existing.spark = clamp(n.sparkSet, 0, 100);
+          else if (typeof n.sparkDelta === "number") existing.spark = clamp(existing.spark + n.sparkDelta, 0, 100);
+          if (typeof n.heatSet === "number") existing.heat = clamp(n.heatSet, 0, 100);
+          else if (typeof n.heatDelta === "number") existing.heat = clamp(existing.heat + n.heatDelta, 0, 100);
           if (typeof n.goal === "string") existing.goal = n.goal.trim();
           if (typeof n.secret === "string") existing.secret = n.secret.trim();
           if (typeof n.lastThought === "string") existing.lastThought = n.lastThought.trim();
         } else {
+          const bond = typeof n.bondSet === "number" ? clamp(n.bondSet, 0, 100) : typeof n.bondDelta === "number" ? clamp(50 + n.bondDelta, 0, 100) : typeof n.relSet === "number" ? clamp(Math.round((n.relSet + 100) / 2), 0, 100) : clamp(50 + Math.round((n.relDelta ?? 0) / 2), 0, 100);
+          const rel = typeof n.relSet === "number" ? clamp(n.relSet, -100, 100) : clamp(bond * 2 - 100, -100, 100);
           const npc = {
             id: makeId("npc"),
             name: n.name.trim(),
             role: n.role?.trim() || "",
             present: n.present ?? true,
             location: n.location?.trim() || world.location,
-            attitude: n.attitude?.trim() || "Wary",
-            relationship: clamp(n.relSet ?? n.relDelta ?? 0, -100, 100),
+            mood: n.mood?.trim() || n.attitude?.trim() || "Guarded",
+            attitude: n.attitude?.trim() || n.mood?.trim() || "Wary",
+            relationship: rel,
+            bond,
+            spark: clamp(n.sparkSet ?? 15 + (n.sparkDelta ?? 0), 0, 100),
+            heat: clamp(n.heatSet ?? 15 + (n.heatDelta ?? 0), 0, 100),
             goal: n.goal?.trim() || "",
             secret: n.secret?.trim() || "",
             lastThought: n.lastThought?.trim() || ""
@@ -577,6 +703,9 @@ function applyDelta(data, delta, settings) {
       }
     }
   }
+  if (turnNotices.length > 0) {
+    data.notices = [...turnNotices, ...data.notices].slice(0, 15);
+  }
   data.initialized = true;
   data.updatedAt = Date.now();
   return {
@@ -586,16 +715,22 @@ function applyDelta(data, delta, settings) {
     levelsGained,
     ptsGained,
     xpGained,
+    notices: turnNotices,
     summary: notes.join(" \xB7 ") || "State synced"
   };
 }
 function buildPromptBlock(data, settings) {
+  normalizeChatData(data, settings.defaultModules);
   if (!data.enabled || !settings.injectPrompt) return null;
+  const wantSystem = data.modules.system && settings.includeSheetInPrompt && data.initialized;
+  const wantTracker = data.modules.tracker && settings.includeWorldInPrompt && data.initialized;
+  const pendingRolls = data.modules.dice && settings.includeRollsInPrompt ? data.rolls.filter((r) => !r.consumed) : [];
+  if (!wantSystem && !wantTracker && pendingRolls.length === 0) return null;
   const lines = ["<weft_chronicle_state>"];
   lines.push(
-    "Authoritative RPG & world state tracked externally by Weft Chronicle. Obey these numbers, injuries, gear, NPC attitudes, and rolled outcomes in the prose without quoting raw stats, HP, XP, or dice numbers in story text. Do NOT emit <Status>, <World_State>, or fake <Dice> blocks \u2014 the extension tracks them automatically."
+    "Authoritative state tracked externally by Weft Chronicle. Honor these injuries, gear, NPC feelings/thoughts, and rolled outcomes in prose without quoting raw stats, HP, XP, or dice numbers in story text. Do NOT emit <Status>, <World_State>, or fake <Dice> XML tags \u2014 the extension displays them automatically."
   );
-  if (settings.includeSheetInPrompt && data.initialized) {
+  if (wantSystem) {
     const s = data.sheet;
     const identity = [s.name, `Lv ${s.level}`, s.race, s.cls, s.subcls, s.rank ? `Rank ${s.rank}` : ""].filter(Boolean).join(" \xB7 ");
     const pools = [
@@ -640,13 +775,15 @@ function buildPromptBlock(data, settings) {
       lines.push(`[QUESTS] ${qLines.join(" | ")}`);
     }
   }
-  if (settings.includeWorldInPrompt && data.initialized) {
+  if (wantTracker) {
     const w = data.world;
     const sceneBits = [
       w.location && w.location !== "Unknown" ? `Place: ${w.location}` : "",
       w.time ? `Time: ${w.time}` : "",
       w.weather ? `Weather: ${w.weather}` : "",
-      w.mood ? `Mood: ${w.mood}` : ""
+      w.mood ? `Mood: ${w.mood}` : "",
+      w.arc ? `Arc: ${w.arc}` : "",
+      w.phase ? `Phase: ${w.phase}` : ""
     ].filter(Boolean);
     if (sceneBits.length > 0) {
       lines.push(`[SCENE] ${sceneBits.join(" | ")}`);
@@ -654,39 +791,34 @@ function buildPromptBlock(data, settings) {
     if (w.npcs.length > 0) {
       const present = w.npcs.filter((n) => n.present);
       const away = w.npcs.filter((n) => !n.present).slice(0, 4);
-      const fmtNpc = (n) => `${n.name} (${n.attitude}, rel ${n.relationship >= 0 ? "+" : ""}${n.relationship}${n.goal ? `; wants: ${n.goal}` : ""})`;
+      const fmtNpc = (n) => `${n.name} (${n.mood || n.attitude}, Bond ${n.bond}/100, Spark ${n.spark}/100, Heat ${n.heat}/100${n.goal ? `; wants: ${n.goal}` : ""})`;
       if (present.length > 0) lines.push(`[NPCS PRESENT] ${present.map(fmtNpc).join(" | ")}`);
       if (away.length > 0) lines.push(`[NPCS OFFSCREEN] ${away.map((n) => `${n.name} @ ${n.location}`).join(" | ")}`);
     }
     const activeThreads = w.threads.filter((t) => t.status !== "resolved").slice(0, 5);
     if (activeThreads.length > 0) {
-      lines.push(`[THREADS] ${activeThreads.map((t) => `${t.title}: ${t.detail}`).join(" | ")}`);
+      lines.push(`[THREADS] ${activeThreads.map((t) => `[${t.status}] ${t.title}: ${t.detail}`).join(" | ")}`);
     }
   }
-  if (settings.includeRollsInPrompt) {
-    const pending = data.rolls.filter((r) => !r.consumed);
-    if (pending.length > 0) {
-      lines.push("[BINDING DICE ROLLS \u2014 ALREADY ROLLED WITH FAIR RNG; NARRATE THESE EXACT OUTCOMES]");
-      for (const r of pending) {
-        const statStr = r.stat === "none" ? "Flat" : `${r.stat.toUpperCase()} ${formatMod(r.statMod)}`;
-        const gearStr = r.gearBonus !== 0 ? ` + Gear ${formatMod(r.gearBonus)}` : "";
-        lines.push(
-          `- ${r.who} attempts "${r.action}": d20=${r.roll} (${statStr}${gearStr}) = ${r.total} vs DC ${r.dc} -> ${r.verdict.toUpperCase()}`
-        );
-      }
+  if (pendingRolls.length > 0) {
+    lines.push("[BINDING DICE ROLLS \u2014 ALREADY ROLLED WITH FAIR RNG; NARRATE THESE EXACT OUTCOMES]");
+    for (const r of pendingRolls) {
+      const statStr = r.stat === "none" ? "Flat" : `${r.stat.toUpperCase()} ${formatMod(r.statMod)}`;
+      const gearStr = r.gearBonus !== 0 ? ` + Gear ${formatMod(r.gearBonus)}` : "";
+      lines.push(
+        `- ${r.who} attempts "${r.action}": d20=${r.roll} (${statStr}${gearStr}) = ${r.total} vs DC ${r.dc} -> ${r.verdict.toUpperCase()}`
+      );
     }
   }
-  if (lines.length <= 2) return null;
   lines.push("</weft_chronicle_state>");
   return lines.join("\n");
 }
 
 // src/extractor.ts
 function buildInitMessages(input) {
-  const system = `You are a deterministic RPG state initializer for a text roleplay.
-Output ONLY valid JSON (no markdown fences, no commentary) matching this exact schema:
-{
-  "sheet": {
+  const schemaParts = [];
+  if (input.modules.system) {
+    schemaParts.push(`  "sheet": {
     "name": "string (player character name)",
     "race": "string (default Human)",
     "cls": "string (grounded role like Survivor, Homesteader, Knight, Mage \u2014 empty if none fits)",
@@ -702,22 +834,45 @@ Output ONLY valid JSON (no markdown fences, no commentary) matching this exact s
     "skillsAdded": [{ "name": "string", "cost": "optional", "note": "short" }],
     "questsUpserted": [{ "title": "string", "kind": "main|side", "status": "active|available", "objectives": [{ "text": "string", "done": false }], "reward": "" }],
     "logSummary": "Initialized from opening scene."
-  },
-  "world": {
+  }`);
+  }
+  if (input.modules.tracker) {
+    schemaParts.push(`  "world": {
     "location": "current specific place",
     "time": "time of day / timeline",
     "weather": "weather if mentioned",
-    "mood": "short 3-6 word mood",
+    "mood": "short 3-6 word scene mood",
+    "arc": "Opening|Rising|Turning|Climax|Fallout",
+    "phase": "Setup|Tension|Confrontation|Intimacy|Aftermath",
     "npcsUpserted": [
-      { "name": "NPC name", "role": "short role", "present": true, "location": "place", "attitude": "Wary/Friendly/Hostile/etc", "relSet": 0, "goal": "what they want now", "secret": "hidden motive if any", "lastThought": "" }
+      {
+        "name": "NPC name",
+        "role": "short role",
+        "present": true,
+        "location": "place",
+        "mood": "1-3 word current mood",
+        "attitude": "Wary/Warm/Guarded/Hostile/etc",
+        "bondSet": 50,
+        "sparkSet": 15,
+        "heatSet": 15,
+        "goal": "what they want right now",
+        "secret": "hidden motive or unspoken truth if any",
+        "lastThought": "short 1-sentence private inner thought in their voice"
+      }
     ],
-    "threadsUpserted": [{ "title": "short hook", "status": "active", "detail": "one concise line" }]
+    "threadsUpserted": [{ "title": "short hook or timer", "status": "active|seed", "detail": "one concise line" }]
+  }`);
   }
+  const system = `You are a deterministic RPG & Story Tracker state initializer for a text roleplay.
+Output ONLY valid JSON (no markdown fences, no commentary) matching this exact schema:
+{
+${schemaParts.join(",\n")}
 }
 Rules:
 - Adapt strictly to the world. Set useMp=false in realistic/modern/zombie/non-magic worlds unless magic/psionics/Sanity explicitly exists.
 - If persona or card specifies an explicit starting level or numbers, respect them; otherwise levelSet=1 with six stats in 3-8 totalling ~33 shaped by background.
-- Ordinary modern/survival items use rarity="ordinary". Do not invent fantasy gear or fake quests out of nothing.`;
+- Ordinary modern/survival items use rarity="ordinary". Do not invent fantasy gear or fake quests out of nothing.
+- Tracker meters are 0..100: bondSet (trust/warmth: 0 hostile, 50 neutral, 100 devoted), sparkSet (chemistry/intrigue 0..100), heatSet (tension/danger/intensity 0..100).`;
   const user = [
     `PLAYER PERSONA: ${input.userName}`,
     input.personaDesc ? input.personaDesc.slice(0, 1200) : "(No persona description)",
@@ -737,8 +892,10 @@ Rules:
 function buildDeltaMessages(data, recentTranscript) {
   const s = data.sheet;
   const w = data.world;
-  const currentSummary = JSON.stringify({
-    sheet: {
+  const stateObj = {};
+  const schemaParts = [];
+  if (data.modules.system) {
+    stateObj.sheet = {
       name: s.name,
       level: s.level,
       hp: `${s.hp}/${s.hpMax}`,
@@ -753,20 +910,8 @@ function buildDeltaMessages(data, recentTranscript) {
       bag: s.bag.map((x) => `${x.name} x${x.qty}`),
       effects: s.effects.map((e) => `${e.name}(${e.duration ?? "ongoing"})`),
       quests: s.quests.map((q) => ({ title: q.title, status: q.status }))
-    },
-    world: {
-      location: w.location,
-      time: w.time,
-      weather: w.weather,
-      npcs: w.npcs.map((n) => ({ name: n.name, present: n.present, rel: n.relationship, attitude: n.attitude })),
-      threads: w.threads.filter((t) => t.status !== "resolved").map((t) => t.title)
-    }
-  });
-  const system = `You are a strict RPG & world-state delta extractor.
-Read the latest roleplay turn and compare it against CURRENT_STATE. Output ONLY valid JSON (no markdown fences, no commentary) containing ONLY fields that actually changed on the page. Never compute level-ups or max HP yourself \u2014 emit raw deltas only.
-Schema (all keys optional; omit unchanged fields):
-{
-  "sheet": {
+    };
+    schemaParts.push(`  "sheet": {
     "hpDelta": 0,          // negative for wounds (graze -1..-4, solid -5..-12, serious -13..-25, crippling -26+), positive for healing
     "spDelta": 0,          // negative for strenuous effort (-2..-8), positive for catching breath
     "mpDelta": 0,          // only if useMp is true
@@ -781,23 +926,50 @@ Schema (all keys optional; omit unchanged fields):
     "skillsAdded": [{ "name": "string", "cost": "", "note": "" }],
     "questsUpserted": [{ "title": "string", "kind": "main|side", "status": "active|available|done|failed", "objectives": [{ "text": "string", "done": false }], "reward": "" }],
     "logSummary": "short 1-line summary of what changed"
-  },
-  "world": {
+  }`);
+  }
+  if (data.modules.tracker) {
+    stateObj.world = {
+      location: w.location,
+      time: w.time,
+      weather: w.weather,
+      arc: w.arc,
+      phase: w.phase,
+      npcs: w.npcs.map((n) => ({
+        name: n.name,
+        present: n.present,
+        mood: n.mood,
+        bond: n.bond,
+        spark: n.spark,
+        heat: n.heat
+      })),
+      threads: w.threads.filter((t) => t.status !== "resolved").map((t) => `[${t.status}] ${t.title}`)
+    };
+    schemaParts.push(`  "world": {
     "location": "only if moved",
     "time": "only if time passed",
     "weather": "only if weather changed",
     "mood": "short 3-6 word scene mood",
+    "arc": "Opening|Rising|Turning|Climax|Fallout (only if shifted)",
+    "phase": "Setup|Tension|Confrontation|Intimacy|Aftermath (only if shifted)",
     "dayDelta": 0,
-    "npcsUpserted": [{ "name": "NPC name", "role": "", "present": true, "location": "", "attitude": "", "relDelta": 0, "goal": "", "secret": "", "lastThought": "" }],
+    "npcsUpserted": [{ "name": "NPC name", "role": "", "present": true, "location": "", "mood": "1-3 word mood", "attitude": "", "bondDelta": 0, "sparkDelta": 0, "heatDelta": 0, "goal": "current want", "secret": "", "lastThought": "1-sentence private thought in their voice" }],
     "threadsUpserted": [{ "title": "string", "status": "active|seed|resolved", "detail": "one line" }]
+  }`);
   }
+  const system = `You are a strict RPG & Story Tracker delta extractor.
+Read the latest roleplay turn and compare it against CURRENT_STATE. Output ONLY valid JSON (no markdown fences, no commentary) containing ONLY fields that actually changed on the page. Never compute level-ups or max HP yourself \u2014 emit raw deltas only.
+Schema (all keys optional; omit unchanged fields):
+{
+${schemaParts.join(",\n")}
 }
 Rules:
 - Never change numbers without an explicit cause in the latest turn.
-- Keep relationship relDelta small and grounded (-15 to +15 per turn; 0 if unchanged).
-- If nothing changed on the sheet, still update world.mood / world.time / npc attitude if relevant, or return {}.`;
+- Keep bondDelta / sparkDelta / heatDelta grounded (-10 to +10 per turn; 0 if unchanged).
+- Always refresh lastThought and mood for NPCs who spoke or acted in the latest turn.
+- If nothing changed at all, return {}.`;
   const user = `CURRENT_STATE:
-${currentSummary}
+${JSON.stringify(stateObj)}
 
 LATEST TURN:
 ${recentTranscript.slice(-4500)}`;
@@ -896,7 +1068,14 @@ async function loadSettings(userId) {
       fallback: defaults,
       userId
     });
-    const merged = { ...defaults, ...stored || {} };
+    const merged = {
+      ...defaults,
+      ...stored || {},
+      defaultModules: {
+        ...createDefaultModules(),
+        ...stored?.defaultModules || {}
+      }
+    };
     settingsCache.set(key, merged);
     return merged;
   } catch {
@@ -938,9 +1117,7 @@ async function loadChatData(chatId, userId) {
         userId
       });
       if (stored && stored.sheet && stored.world) {
-        if (!stored.snapshots) stored.snapshots = {};
-        if (!Array.isArray(stored.rolls)) stored.rolls = [];
-        recomputeSheetPools(stored.sheet);
+        normalizeChatData(stored, settings.defaultModules);
         chatCache.set(ckey, stored);
         return stored;
       }
@@ -949,7 +1126,7 @@ async function loadChatData(chatId, userId) {
     spindle.log.warn(`Could not read chat data for ${chatId}: ${String(err)}`);
   }
   const userName = await resolvePersonaName(userId);
-  const fresh = createDefaultChatData(chatId, settings.enabledByDefault, userName);
+  const fresh = createDefaultChatData(chatId, settings.enabledByDefault, userName, settings.defaultModules);
   chatCache.set(ckey, fresh);
   return fresh;
 }
@@ -964,14 +1141,16 @@ async function saveChatData(data, userId) {
     spindle.log.warn(`Failed to save chat ${data.chatId}: ${String(err)}`);
   }
 }
-function recordSnapshot(data, messageId, swipeId) {
+function recordSnapshot(data, messageId, swipeId, turnNotices = [], turnRolls = []) {
   const key = `${messageId}:${swipeId}`;
   const snap = {
     messageId,
     swipeId,
     timestamp: Date.now(),
     sheet: deepClone(data.sheet),
-    world: deepClone(data.world)
+    world: deepClone(data.world),
+    notices: deepClone(turnNotices),
+    rolls: deepClone(turnRolls)
   };
   data.snapshots[key] = snap;
   data.lastSyncedKey = key;
@@ -983,6 +1162,13 @@ function recordSnapshot(data, messageId, swipeId) {
     }
   }
 }
+function refreshLatestSnapshot(data) {
+  if (!data.lastSyncedKey) return;
+  const snap = data.snapshots[data.lastSyncedKey];
+  if (!snap) return;
+  snap.sheet = deepClone(data.sheet);
+  snap.world = deepClone(data.world);
+}
 function restoreSnapshot(data, key) {
   const snap = data.snapshots[key];
   if (!snap) return false;
@@ -990,6 +1176,7 @@ function restoreSnapshot(data, key) {
   data.world = deepClone(snap.world);
   data.lastSyncedKey = key;
   data.initialized = true;
+  normalizeChatData(data);
   return true;
 }
 function getPermissionFlags() {
@@ -1122,9 +1309,7 @@ async function resolveConnectionId(settings, userId) {
     return settings.sidecarConnectionId.trim();
   }
   const uiActive = activeConnByUser.get(userKey(userId));
-  if (uiActive) {
-    return uiActive;
-  }
+  if (uiActive) return uiActive;
   try {
     const list = await spindle.connections.list(userId);
     const valid = list.filter((c) => Boolean(c?.id && c?.provider));
@@ -1149,12 +1334,8 @@ async function runSidecarLlm(messages, settings, userId) {
       reasoning: { source: "off" },
       signal: controller.signal
     };
-    if (userId) {
-      quietReq.userId = userId;
-    }
-    if (connectionId) {
-      quietReq.connection_id = connectionId;
-    }
+    if (userId) quietReq.userId = userId;
+    if (connectionId) quietReq.connection_id = connectionId;
     try {
       const result = await spindle.generate.quiet(quietReq);
       return extractTextFromGenerationResult(result);
@@ -1182,7 +1363,7 @@ async function runSidecarLlm(messages, settings, userId) {
       const msg = quietErr instanceof Error ? quietErr.message : String(quietErr);
       if (/unknown provider/i.test(msg)) {
         throw new Error(
-          "No active LLM connection profile found. Open Dice \u2192 Configuration and select a Sidecar LLM Connection."
+          "No active LLM connection profile found. Open \u2699\uFE0F Settings and select a Sidecar LLM Connection."
         );
       }
       throw quietErr;
@@ -1194,18 +1375,20 @@ async function runSidecarLlm(messages, settings, userId) {
 async function runAiBootstrap(chatId, rawUserId) {
   const userId = rememberUserForChat(chatId, rawUserId);
   if (!spindle.permissions.has("generation")) {
-    spindle.toast.warning('Grant the "generation" permission to auto-initialize from your chat.', {
-      userId
-    });
+    spindle.toast.warning('Grant the "generation" permission to auto-initialize from your chat.', { userId });
+    return;
+  }
+  const data = await loadChatData(chatId, userId);
+  if (!data.modules.system && !data.modules.tracker) {
+    spindle.toast.info("Both System and Tracker modules are turned OFF for this chat.", { userId });
     return;
   }
   const ckey = chatCacheKey(userId, chatId);
   if (syncingChats.has(ckey)) return;
   syncingChats.add(ckey);
-  await pushStateToFrontend(chatId, userId, { statusNote: "Initializing sheet & world\u2026" });
+  await pushStateToFrontend(chatId, userId, { statusNote: "Initializing\u2026" });
   try {
     const settings = await loadSettings(userId);
-    const data = await loadChatData(chatId, userId);
     let userName = data.sheet.name || "Survivor";
     let personaDesc = "";
     if (spindle.permissions.has("personas")) {
@@ -1237,6 +1420,7 @@ async function runAiBootstrap(chatId, rawUserId) {
     }
     const { transcript, tailMessageId, tailSwipeId } = await gatherRecentTranscript(chatId, 6);
     const promptMsgs = buildInitMessages({
+      modules: data.modules,
       userName,
       personaDesc,
       charName,
@@ -1247,27 +1431,27 @@ async function runAiBootstrap(chatId, rawUserId) {
     const raw = await runSidecarLlm(promptMsgs, settings, userId);
     const delta = parseJsonDelta(raw);
     if (!delta) {
-      spindle.toast.warning("Sidecar returned unreadable JSON during init. Try again or pick a stronger sidecar model.", {
+      spindle.toast.warning("Sidecar returned unreadable JSON during init. Try again or pick another sidecar model in \u2699\uFE0F Settings.", {
         userId
       });
       return;
     }
-    data.sheet = createDefaultChatData(chatId, data.enabled, userName).sheet;
-    data.world = createDefaultChatData(chatId, data.enabled, userName).world;
+    const freshDefaults = createDefaultChatData(chatId, data.enabled, userName, data.modules);
+    if (data.modules.system) data.sheet = freshDefaults.sheet;
+    if (data.modules.tracker) data.world = freshDefaults.world;
     data.initialized = false;
-    applyDelta(data, delta, settings);
+    const outcome = applyDelta(data, delta, settings);
     if (tailMessageId) {
-      recordSnapshot(data, tailMessageId, tailSwipeId);
+      recordSnapshot(data, tailMessageId, tailSwipeId, outcome.notices, []);
     }
     await saveChatData(data, userId);
-    spindle.toast.success(`Initialized ${data.sheet.name} (Lv ${data.sheet.level}) & ${data.world.npcs.length} NPC(s).`, {
-      userId
-    });
+    spindle.toast.success(
+      `Initialized${data.modules.system ? ` ${data.sheet.name} (Lv ${data.sheet.level})` : ""}${data.modules.tracker ? ` \xB7 ${data.world.npcs.length} NPC(s)` : ""}.`,
+      { userId }
+    );
   } catch (err) {
     spindle.log.error(`Bootstrap error: ${String(err)}`);
-    spindle.toast.error(`Init failed: ${err instanceof Error ? err.message : String(err)}`, {
-      userId
-    });
+    spindle.toast.error(`Init failed: ${err instanceof Error ? err.message : String(err)}`, { userId });
   } finally {
     syncingChats.delete(ckey);
     await pushStateToFrontend(chatId, userId);
@@ -1277,15 +1461,19 @@ async function runDeltaSync(chatId, rawUserId, opts) {
   const userId = rememberUserForChat(chatId, rawUserId);
   if (!spindle.permissions.has("generation")) {
     if (opts?.manual) {
-      spindle.toast.warning('Grant the "generation" permission to sync state automatically.', {
-        userId
-      });
+      spindle.toast.warning('Grant the "generation" permission to sync state automatically.', { userId });
     }
     return;
   }
   const settings = await loadSettings(userId);
   const data = await loadChatData(chatId, userId);
   if (!data.enabled) return;
+  if (!data.modules.system && !data.modules.tracker) {
+    if (opts?.manual) {
+      spindle.toast.info("Both System and Tracker modules are OFF for this chat.", { userId });
+    }
+    return;
+  }
   if (!data.initialized) {
     await runAiBootstrap(chatId, userId);
     return;
@@ -1307,22 +1495,21 @@ async function runDeltaSync(chatId, rawUserId, opts) {
     const delta = parseJsonDelta(raw);
     if (!delta) {
       if (opts?.manual) {
-        spindle.toast.warning("Could not parse state delta JSON from sidecar model.", {
-          userId
-        });
+        spindle.toast.warning("Could not parse state delta JSON from sidecar model.", { userId });
       }
       return;
     }
     const outcome = applyDelta(data, delta, settings);
-    let consumedAny = false;
+    const resolvedThisTurn = [];
     for (const r of data.rolls) {
       if (!r.consumed) {
         r.consumed = true;
-        consumedAny = true;
+        if (effectiveMsgId) r.messageId = effectiveMsgId;
+        resolvedThisTurn.push(r);
       }
     }
     if (effectiveMsgId) {
-      recordSnapshot(data, effectiveMsgId, tailSwipeId);
+      recordSnapshot(data, effectiveMsgId, tailSwipeId, outcome.notices, resolvedThisTurn);
     }
     await saveChatData(data, userId);
     if (outcome.leveledUp) {
@@ -1330,15 +1517,13 @@ async function runDeltaSync(chatId, rawUserId, opts) {
         `${data.sheet.name} reached Level ${outcome.newLevel}! (+${outcome.ptsGained} stat pts, +25% recovery)`,
         { title: "LEVEL UP", duration: 6e3, userId }
       );
-    } else if (opts?.manual || consumedAny) {
+    } else if (opts?.manual || resolvedThisTurn.length > 0) {
       spindle.toast.info(outcome.summary, { title: "Synced", duration: 3500, userId });
     }
   } catch (err) {
     spindle.log.error(`Delta sync failed for ${chatId}: ${String(err)}`);
     if (opts?.manual) {
-      spindle.toast.error(`Sync failed: ${err instanceof Error ? err.message : String(err)}`, {
-        userId
-      });
+      spindle.toast.error(`Sync failed: ${err instanceof Error ? err.message : String(err)}`, { userId });
     }
   } finally {
     syncingChats.delete(ckey);
@@ -1435,7 +1620,7 @@ spindle.on("MESSAGE_SWIPED", async (payload, rawUserId) => {
     if (restoreSnapshot(data, key)) {
       await saveChatData(data, userId);
       await pushStateToFrontend(payload.chatId, userId, {
-        statusNote: `Restored swipe #${payload.swipeId + 1} state`
+        statusNote: `Restored swipe #${payload.swipeId + 1}`
       });
     }
   }
@@ -1451,7 +1636,7 @@ spindle.on("MESSAGE_DELETED", async (payload, rawUserId) => {
     const key = `${tailMessageId}:${tailSwipeId}`;
     if (restoreSnapshot(data, key)) {
       await saveChatData(data, userId);
-      await pushStateToFrontend(chatId, userId, { statusNote: "Rewound state after delete" });
+      await pushStateToFrontend(chatId, userId, { statusNote: "Rewound after delete" });
     }
   }
 });
@@ -1462,15 +1647,19 @@ spindle.on("GENERATION_ENDED", async (payload, rawUserId) => {
   const settings = await loadSettings(userId);
   const data = await loadChatData(payload.chatId, userId);
   if (!data.enabled) return;
-  if (!settings.autoSync) {
-    let changed = false;
+  if (!settings.autoSync || !data.modules.system && !data.modules.tracker) {
+    const resolved = [];
     for (const r of data.rolls) {
       if (!r.consumed) {
         r.consumed = true;
-        changed = true;
+        if (payload.messageId) r.messageId = payload.messageId;
+        resolved.push(r);
       }
     }
-    if (changed) {
+    if (resolved.length > 0) {
+      if (payload.messageId) {
+        recordSnapshot(data, payload.messageId, 0, [], resolved);
+      }
       await saveChatData(data, userId);
       await pushStateToFrontend(payload.chatId, userId);
     }
@@ -1509,6 +1698,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
             if (active?.id) {
               resolvedChatId = active.id;
               activeChatByUser.set(userKey(userId), active.id);
+              rememberUserForChat(active.id, userId);
             }
           } catch {
           }
@@ -1519,7 +1709,14 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
       case "update_settings": {
         const patch = msg.patch || {};
         const current = await loadSettings(userId);
-        const next = { ...current, ...patch };
+        const next = {
+          ...current,
+          ...patch,
+          defaultModules: {
+            ...current.defaultModules,
+            ...patch.defaultModules || {}
+          }
+        };
         await saveSettings(next, userId);
         await pushStateToFrontend(activeChatId, userId, { statusNote: "Settings saved" });
         return;
@@ -1530,6 +1727,18 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         data.enabled = Boolean(msg.enabled);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
+        return;
+      }
+      case "toggle_module": {
+        if (!activeChatId) return;
+        const mod = msg.module;
+        if (mod !== "system" && mod !== "tracker" && mod !== "dice") return;
+        const data = await loadChatData(activeChatId, userId);
+        data.modules[mod] = Boolean(msg.enabled);
+        await saveChatData(data, userId);
+        await pushStateToFrontend(activeChatId, userId, {
+          statusNote: `${mod[0].toUpperCase() + mod.slice(1)} ${data.modules[mod] ? "ON" : "OFF"}`
+        });
         return;
       }
       case "allocate_stat": {
@@ -1543,6 +1752,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
           return;
         }
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1552,6 +1762,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const data = await loadChatData(activeChatId, userId);
         const note = autoAllocateAllPoints(data.sheet);
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId, { statusNote: note });
         return;
@@ -1565,6 +1776,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         data.sheet.stats[stat] = clamp(value, 1, 99);
         recomputeSheetPools(data.sheet, { raiseCurrentByMaxDelta: true });
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1579,6 +1791,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         if (pool === "sp") data.sheet.sp = clamp(data.sheet.sp + deltaVal, 0, data.sheet.spMax);
         if (pool === "mp") data.sheet.mp = clamp(data.sheet.mp + deltaVal, 0, data.sheet.mpMax);
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1589,6 +1802,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const settings = await loadSettings(userId);
         const data = await loadChatData(activeChatId, userId);
         applyDelta(data, { sheet: { rest: kind } }, settings);
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId, {
           statusNote: kind === "long" ? "Long rest applied" : "Short rest applied"
@@ -1602,6 +1816,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const settings = await loadSettings(userId);
         const data = await loadChatData(activeChatId, userId);
         const outcome = applyDelta(data, { sheet: { xpGain: Math.floor(amount) } }, { ...settings, trackXp: true });
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         if (outcome.leveledUp) {
           spindle.toast.success(`LEVEL UP! ${data.sheet.name} is now Lv ${outcome.newLevel} (+${outcome.ptsGained} pts).`, {
@@ -1609,6 +1824,14 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
             userId
           });
         }
+        await pushStateToFrontend(activeChatId, userId);
+        return;
+      }
+      case "clear_notices": {
+        if (!activeChatId) return;
+        const data = await loadChatData(activeChatId, userId);
+        data.notices = [];
+        await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
       }
@@ -1635,6 +1858,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
           s.pts = clamp(patch.pts, 0, 999);
         }
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1656,6 +1880,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
           if (added) equipItem(data.sheet, added.id);
         }
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1666,6 +1891,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const qty = typeof msg.qty === "number" ? msg.qty : 1;
         const data = await loadChatData(activeChatId, userId);
         removeItemFromBag(data.sheet, id, qty);
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1674,6 +1900,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         if (!activeChatId) return;
         const data = await loadChatData(activeChatId, userId);
         equipItem(data.sheet, String(msg.id || ""));
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1683,6 +1910,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const slot = msg.slot;
         const data = await loadChatData(activeChatId, userId);
         unequipSlot(data.sheet, slot);
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1700,6 +1928,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
           note: ef.note || ""
         });
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1709,6 +1938,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const id = String(msg.id || "");
         const data = await loadChatData(activeChatId, userId);
         data.sheet.effects = data.sheet.effects.filter((e) => e.id !== id);
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1725,6 +1955,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
           note: sk.note || ""
         });
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1734,6 +1965,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const id = String(msg.id || "");
         const data = await loadChatData(activeChatId, userId);
         data.sheet.skills = data.sheet.skills.filter((s) => s.id !== id);
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1763,6 +1995,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
           });
         }
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1775,6 +2008,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const quest = data.sheet.quests.find((x) => x.id === qid);
         const obj = quest?.objectives.find((o) => o.id === oid);
         if (obj) obj.done = !obj.done;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1784,6 +2018,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const id = String(msg.id || "");
         const data = await loadChatData(activeChatId, userId);
         data.sheet.quests = data.sheet.quests.filter((q) => q.id !== id);
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1796,11 +2031,14 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         if (typeof patch.time === "string") data.world.time = patch.time.trim();
         if (typeof patch.weather === "string") data.world.weather = patch.weather.trim();
         if (typeof patch.mood === "string") data.world.mood = patch.mood.trim();
+        if (typeof patch.arc === "string") data.world.arc = patch.arc.trim();
+        if (typeof patch.phase === "string") data.world.phase = patch.phase.trim();
         if (typeof patch.notes === "string") data.world.notes = patch.notes.trim();
         if (typeof patch.dayCount === "number" && Number.isFinite(patch.dayCount)) {
           data.world.dayCount = clamp(patch.dayCount, 1, 99999);
         }
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1816,26 +2054,41 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
           if (npc.role !== void 0) existing.role = npc.role;
           if (npc.present !== void 0) existing.present = Boolean(npc.present);
           if (npc.location !== void 0) existing.location = npc.location;
+          if (npc.mood !== void 0) existing.mood = npc.mood;
           if (npc.attitude !== void 0) existing.attitude = npc.attitude;
-          if (typeof npc.relationship === "number") existing.relationship = clamp(npc.relationship, -100, 100);
+          if (typeof npc.bond === "number") {
+            existing.bond = clamp(npc.bond, 0, 100);
+            existing.relationship = clamp(existing.bond * 2 - 100, -100, 100);
+          } else if (typeof npc.relationship === "number") {
+            existing.relationship = clamp(npc.relationship, -100, 100);
+            existing.bond = clamp(Math.round((existing.relationship + 100) / 2), 0, 100);
+          }
+          if (typeof npc.spark === "number") existing.spark = clamp(npc.spark, 0, 100);
+          if (typeof npc.heat === "number") existing.heat = clamp(npc.heat, 0, 100);
           if (npc.goal !== void 0) existing.goal = npc.goal;
           if (npc.secret !== void 0) existing.secret = npc.secret;
           if (npc.lastThought !== void 0) existing.lastThought = npc.lastThought;
         } else {
+          const bond = typeof npc.bond === "number" ? clamp(npc.bond, 0, 100) : 50;
           data.world.npcs.push({
             id: makeId("npc"),
             name: npc.name.trim(),
             role: npc.role || "",
             present: npc.present ?? true,
             location: npc.location || data.world.location,
-            attitude: npc.attitude || "Wary",
-            relationship: clamp(npc.relationship ?? 0, -100, 100),
+            mood: npc.mood || npc.attitude || "Guarded",
+            attitude: npc.attitude || npc.mood || "Wary",
+            bond,
+            relationship: clamp(bond * 2 - 100, -100, 100),
+            spark: clamp(npc.spark ?? 15, 0, 100),
+            heat: clamp(npc.heat ?? 15, 0, 100),
             goal: npc.goal || "",
             secret: npc.secret || "",
             lastThought: npc.lastThought || ""
           });
         }
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1845,6 +2098,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const id = String(msg.id || "");
         const data = await loadChatData(activeChatId, userId);
         data.world.npcs = data.world.npcs.filter((n) => n.id !== id);
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1868,6 +2122,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
           });
         }
         data.initialized = true;
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1877,6 +2132,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         const id = String(msg.id || "");
         const data = await loadChatData(activeChatId, userId);
         data.world.threads = data.world.threads.filter((t) => t.id !== id);
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         await pushStateToFrontend(activeChatId, userId);
         return;
@@ -1934,7 +2190,12 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         if (!activeChatId) return;
         const settings = await loadSettings(userId);
         const userName = await resolvePersonaName(userId);
-        const fresh = createDefaultChatData(activeChatId, settings.enabledByDefault, userName);
+        const fresh = createDefaultChatData(
+          activeChatId,
+          settings.enabledByDefault,
+          userName,
+          settings.defaultModules
+        );
         await saveChatData(fresh, userId);
         await pushStateToFrontend(activeChatId, userId, { statusNote: "Chat state reset" });
         return;
@@ -1952,7 +2213,8 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         data.world = parsed.world;
         data.rolls = Array.isArray(parsed.rolls) ? parsed.rolls : [];
         data.initialized = true;
-        recomputeSheetPools(data.sheet);
+        normalizeChatData(data);
+        refreshLatestSnapshot(data);
         await saveChatData(data, userId);
         spindle.toast.success("Imported Weft Chronicle state.", { userId });
         await pushStateToFrontend(activeChatId, userId);
@@ -1961,9 +2223,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
     }
   } catch (err) {
     spindle.log.error(`RPC ${type} failed: ${String(err)}`);
-    spindle.toast.error(`Action failed: ${err instanceof Error ? err.message : String(err)}`, {
-      userId
-    });
+    spindle.toast.error(`Action failed: ${err instanceof Error ? err.message : String(err)}`, { userId });
   }
 });
-spindle.log.info("Weft Chronicle backend initialized.");
+spindle.log.info("Weft Chronicle v2 backend initialized.");
