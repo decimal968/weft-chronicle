@@ -1,11 +1,11 @@
 {
-  "version": "2.1.0",
+  "version": "2.2.0",
   "name": "Weft Chronicle",
   "identifier": "weft_chronicle",
   "author": "decimal968",
   "github": "https://github.com/decimal968/weft-chronicle",
   "homepage": "https://github.com/decimal968/weft-chronicle",
-  "description": "Authentic Weft litRPG System Window, Story Tracker (Bond/Spark/Heat, Thoughts, Secrets, Arc/Phase), Inventory, Quests & Fair Real-RNG d20 Dice — with independent module toggles, optional inline chat cards, dedicated Settings, sidecar LLM auto-sync, and swipe/delete undo.",
+  "description": "Authentic Weft litRPG System Window, Story Tracker (Bond/Spark/Heat, Thoughts, Secrets, Arc/Phase), Inventory, Quests & Fair Real-RNG d20 Dice — plus a tappable CYOA What Now? card that sends your pick as the next reply. Independent module toggles, optional inline chat cards, dedicated Settings, sidecar LLM auto-sync, and swipe/delete undo.",
   "permissions": [
     "interceptor",
     "generation",

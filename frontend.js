@@ -138,6 +138,43 @@ function renderDiceCard(r, theme) {
     </div>
   `;
 }
+function formatChoiceText(text) {
+  return esc(text).replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+}
+function renderChoicesCard(choices, theme, opts) {
+  const options = Array.isArray(choices?.options) ? choices.options : [];
+  if (options.length === 0) return "";
+  const claimedArr = Array.isArray(choices.claimed) ? choices.claimed : [];
+  const claimed = new Set(claimedArr.filter((n) => Number.isInteger(n)));
+  const snapKey = opts?.snapKey || "";
+  const startOpen = Boolean(opts?.open);
+  const allClaimed = claimed.size >= options.length;
+  return `
+    <details class="wc-cy" data-wc-theme="${esc(theme)}" ${startOpen ? "open" : ""}>
+      <summary class="wc-cy-h">
+        <span class="wc-cy-gem">\u2726</span>
+        <span class="wc-cy-hd"><span class="wc-cy-lab">What now?</span><span class="wc-cy-sum">${allClaimed ? "Path chosen" : "Pick your next move"}</span></span>
+        ${claimed.size > 0 ? `<span class="wc-cy-count">${claimed.size}/${options.length} sent</span>` : ""}
+      </summary>
+      <div class="wc-cy-b">
+        ${options.map((o, i) => {
+          const isClaimed = claimed.has(i);
+          const kind = (o.kind || "").toLowerCase();
+          const kindAttr = kind ? ` data-k="${esc(kind)}"` : "";
+          const heat = Number(o.heat) || 0;
+          const heatAttr = heat >= 1 && heat <= 3 ? ` data-h="${heat}"` : "";
+          const heatDots = heat >= 1 && heat <= 3 ? `<i>${"\u25CF".repeat(heat)}</i>` : "";
+          return `<button type="button" class="wc-cy-opt ${isClaimed ? "is-claimed" : ""}"${kindAttr}${heatAttr} data-act="choice_pick" data-key="${esc(snapKey)}" data-idx="${i}" ${isClaimed ? "disabled" : ""} title="${isClaimed ? "Already sent" : "Send this as your next message"}">
+            <span class="wc-cy-n">${i + 1}</span>
+            <span class="wc-cy-t">${kind ? `<span class="wc-cy-k">${esc(kind)}${heatDots}</span>` : ""}<strong class="wc-cy-tx">${formatChoiceText(o.text)}</strong>${o.stakes ? `<span class="wc-cy-st">${esc(o.stakes)}</span>` : ""}${o.req ? `<span class="wc-cy-rq">${esc(o.req)}</span>` : ""}</span>
+            <span class="wc-cy-go">${isClaimed ? "\u2713" : "\u2192"}</span>
+          </button>`;
+        }).join("")}
+        <div class="wc-cy-hint">${allClaimed ? "Choice sent \u2014 the story continues" : "Tap a path to send it"}</div>
+      </div>
+    </details>
+  `;
+}
 function renderQuestEntry(q, interactive) {
   return `
     <div class="wc-msq" data-s="${esc(q.status)}" data-k="${esc(q.kind)}">
@@ -1559,6 +1596,83 @@ var WEFT_CHRONICLE_CSS = `
 .wc-rarity-legendary { color: #fbbf24; }
 .wc-rarity-mythic    { color: #fb7185; }
 
+/* ---- CYOA Choices ("What now?") ---- */
+.wc-cy {
+  margin: 6px auto;
+  max-width: 520px;
+  border: 1px solid var(--wc-accent-border);
+  border-radius: var(--wc-radius, 12px);
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(var(--pr), 0.14), transparent 58%),
+    radial-gradient(90% 140% at 100% 0%, rgba(var(--vr), 0.12), transparent 62%),
+    var(--wc-bg);
+  box-shadow: 0 12px 32px -16px rgba(var(--pr), 0.35);
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--wc-text);
+}
+.wc-cy-h {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; cursor: pointer; list-style: none; user-select: none;
+}
+.wc-cy-h::-webkit-details-marker { display: none; }
+.wc-cy-h::after { content: ""; flex: none; width: 7px; height: 7px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; opacity: 0.5; margin-left: auto; transform: rotate(45deg); transition: transform 0.2s; }
+.wc-cy[open] .wc-cy-h::after { transform: rotate(225deg); }
+.wc-cy-gem {
+  flex: none; display: grid; place-items: center; width: 30px; height: 30px;
+  border-radius: 10px; background: linear-gradient(135deg, rgb(var(--pr)), rgb(var(--vr)));
+  color: #fff; font-size: 14px; line-height: 1;
+  box-shadow: 0 5px 16px -3px rgba(var(--pr), 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.wc-cy-hd { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.wc-cy-lab { font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; background: linear-gradient(135deg, rgb(var(--pr)), rgb(var(--vr))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wc-cy-sum { font-size: 11px; color: var(--wc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-cy-count { flex: none; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; color: var(--wc-accent); border: 1px solid var(--wc-accent-border); background: var(--wc-accent-soft); border-radius: 999px; padding: 2px 8px; }
+.wc-cy-b { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--wc-border); }
+.wc-cy-opt {
+  --ka: var(--pr);
+  position: relative; display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 12px 8px 9px; border-radius: 10px; text-align: left; cursor: pointer;
+  border: 1px solid rgba(var(--ka), 0.32);
+  background: linear-gradient(100deg, rgba(var(--ka), 0.16), rgba(var(--ka), 0.05) 60%, rgba(127, 127, 127, 0.04));
+  color: inherit; font: inherit; overflow: hidden;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s, background 0.18s;
+}
+.wc-cy-opt::before { content: ""; position: absolute; left: 0; top: 14%; bottom: 14%; width: 3px; border-radius: 0 3px 3px 0; background: rgb(var(--ka)); }
+.wc-cy-opt[data-k="direct"]     { --ka: 251, 113, 133; }
+.wc-cy-opt[data-k="social"]     { --ka: 94, 200, 242; }
+.wc-cy-opt[data-k="careful"]    { --ka: 52, 211, 153; }
+.wc-cy-opt[data-k="investigate"]{ --ka: 250, 204, 21; }
+.wc-cy-opt[data-k="action"]     { --ka: 251, 146, 60; }
+.wc-cy-opt[data-k="intimate"]   { --ka: 244, 114, 182; }
+.wc-cy-opt[data-k="wild"]       { --ka: 167, 139, 250; }
+.wc-cy-opt:hover:not(:disabled) { border-color: rgba(var(--ka), 0.75); background: linear-gradient(100deg, rgba(var(--ka), 0.28), rgba(var(--ka), 0.08) 65%, rgba(127, 127, 127, 0.05)); box-shadow: 0 10px 26px -14px rgb(var(--ka)); transform: translateY(-1px); }
+.wc-cy-opt:focus-visible { outline: 2px solid rgb(var(--ka)); outline-offset: 2px; }
+.wc-cy-opt:disabled { opacity: 0.55; cursor: default; }
+.wc-cy-opt.is-busy { opacity: 0.7; }
+.wc-cy-opt.is-claimed { border-color: var(--wc-border); background: var(--wc-bg); }
+.wc-cy-n {
+  flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  background: linear-gradient(135deg, rgb(var(--ka)), rgba(var(--ka), 0.62));
+  color: #fff; font-size: 12px; font-weight: 800;
+  box-shadow: 0 4px 12px -3px rgba(var(--ka), 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.wc-cy-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: 1.42; }
+.wc-cy-k { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: rgb(var(--ka)); }
+.wc-cy-k i { font-style: normal; letter-spacing: 2px; font-size: 8px; }
+.wc-cy-tx { font-weight: 600; }
+.wc-cy-tx em { font-style: italic; }
+.wc-cy-st { font-size: 11px; color: var(--wc-muted); }
+.wc-cy-rq { font-size: 10px; font-weight: 700; color: var(--wc-warn); }
+.wc-cy-rq::before { content: "\u{1F512}  "; }
+.wc-cy-go { flex: none; font-size: 15px; color: rgb(var(--ka)); opacity: 0.6; padding-left: 6px; transition: transform 0.18s, opacity 0.18s; }
+.wc-cy-opt:hover:not(:disabled) .wc-cy-go { opacity: 1; transform: translateX(3px); }
+.wc-cy-opt.is-claimed .wc-cy-go { color: var(--wc-good); opacity: 1; }
+.wc-cy-hint { text-align: center; font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--wc-dim); margin-top: 1px; }
+@media (prefers-reduced-motion: reduce) {
+  .wc-cy *, .wc-cy *::before, .wc-cy *::after { transition: none !important; }
+}
+
 .wc-modal { padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--lumiverse-text, inherit); }
 .wc-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 `;
@@ -1619,7 +1733,7 @@ function setup(ctx) {
     shortName: "Weft",
     headerTitle: "Weft Chronicle",
     description: "Authentic Weft System Window, Story Tracker, Inventory, Quests & Fair d20 Dice.",
-    keywords: ["weft", "rpg", "status", "system", "tracker", "dice", "d20", "npc", "quests", "settings"],
+    keywords: ["weft", "rpg", "status", "system", "tracker", "dice", "d20", "npc", "quests", "settings", "cyoa", "choices"],
     iconSvg: CREST_SVG
   });
   cleanups.push(() => drawerTab.destroy());
@@ -1632,7 +1746,7 @@ function setup(ctx) {
         shortName: "Weft",
         iconSvg: CREST_SVG,
         description: "Configure Weft Chronicle modules, themes, inline chat cards, and sidecar AI.",
-        keywords: ["weft", "system", "tracker", "dice", "rpg", "sidecar", "theme"]
+        keywords: ["weft", "system", "tracker", "dice", "rpg", "sidecar", "theme", "cyoa", "choices"]
       });
       cleanups.push(() => settingsTabHandle?.destroy());
     } catch {
@@ -1650,6 +1764,71 @@ function setup(ctx) {
   function send(type, extra = {}) {
     const activeConnectionId = getActiveConnectionId();
     ctx.sendToBackend({ type, chatId, activeConnectionId, ...extra });
+  }
+  async function pickChoice(key, index, sourceBtn) {
+    if (!key || !Number.isFinite(index)) return;
+    const snap = data?.snapshots?.[key];
+    const opt = snap?.choices?.options?.[index];
+    if (!opt) return;
+    if (Array.isArray(snap.choices.claimed) && snap.choices.claimed.includes(index)) return;
+    const text = String(opt.text || "").trim().slice(0, 600);
+    if (!text) return;
+    const restoreBtn = () => {
+      if (sourceBtn) {
+        sourceBtn.disabled = false;
+        sourceBtn.classList.remove("is-busy");
+      }
+    };
+    if (sourceBtn) {
+      sourceBtn.disabled = true;
+      sourceBtn.classList.add("is-busy");
+    }
+    // Preferred path: the composer bridge (composer-v1) — set the option as
+    // the draft and hit Send, exactly like the preset's native Send action.
+    let outcome = "error";
+    try {
+      const composer = ctx.composer;
+      if (composer && typeof composer.setText === "function" && typeof composer.send === "function") {
+        let mounted = true;
+        try {
+          const state = typeof composer.getState === "function" ? composer.getState() : null;
+          if (state && state.mounted === false) mounted = false;
+        } catch {
+          mounted = true;
+        }
+        if (mounted) {
+          composer.setText(text);
+          await composer.send();
+          outcome = "sent";
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err || "");
+      outcome = /busy/i.test(msg) ? "busy" : "error";
+    }
+    if (outcome === "sent") {
+      send("choice_claim", { key, index });
+      return;
+    }
+    if (outcome === "busy") {
+      restoreBtn();
+      send("choice_feedback", { kind: "busy" });
+      return;
+    }
+    // Fallback (older host without composer-v1, or send failed): copy to the
+    // clipboard so the user can paste and press Send themselves.
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        send("choice_claim", { key, index });
+        send("choice_feedback", { kind: "copied" });
+        restoreBtn();
+        return;
+      }
+    } catch {
+    }
+    restoreBtn();
+    send("choice_feedback", { kind: "error" });
   }
   function updateChromeState() {
     const diceOn = Boolean(data?.enabled && data?.modules?.dice);
@@ -1696,11 +1875,20 @@ function setup(ctx) {
   function findSnapshotForMessage(d, messageId) {
     if (d.lastSyncedKey && d.lastSyncedKey.startsWith(`${messageId}:`)) {
       const activeSnap = d.snapshots[d.lastSyncedKey];
-      if (activeSnap) return activeSnap;
+      if (activeSnap) return { snap: activeSnap, key: d.lastSyncedKey };
     }
-    const matching = Object.values(d.snapshots || {}).filter((s) => s.messageId === messageId).sort((a, b) => b.timestamp - a.timestamp);
-    if (matching.length > 0) return matching[0];
+    const matching = Object.entries(d.snapshots || {}).filter(([, s]) => s && s.messageId === messageId).sort((a, b) => (b[1]?.timestamp || 0) - (a[1]?.timestamp || 0));
+    if (matching.length > 0) {
+      return { snap: matching[0][1], key: matching[0][0] };
+    }
     return null;
+  }
+  function findLatestChoices(d) {
+    if (!d) return null;
+    const entries = Object.entries(d.snapshots || {}).filter(([, s]) => s && s.choices && Array.isArray(s.choices.options) && s.choices.options.length > 0);
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => (b[1]?.timestamp || 0) - (a[1]?.timestamp || 0));
+    return { snap: entries[0][1], key: entries[0][0] };
   }
   function isInsideOurInjection(el) {
     return Boolean(el.closest(".wc-inline-wrap"));
@@ -1812,24 +2000,27 @@ function setup(ctx) {
     }
     return { target: bubbleEl, position: "beforeend", padX: null, afterIsland: false };
   }
-  function buildInlineHtml(d, cfg, snap, padX, afterIsland) {
+  function buildInlineHtml(d, cfg, snap, padX, afterIsland, snapKey) {
     const parts = [];
     const sysTh = resolveSystemTheme(cfg);
-    if (d.modules.dice && cfg.showInlineDice && Array.isArray(snap.rolls) && snap.rolls.length > 0) {
+    if (d.initialized && d.modules.dice && cfg.showInlineDice && Array.isArray(snap.rolls) && snap.rolls.length > 0) {
       for (const r of snap.rolls) {
         parts.push(renderDiceCard(r, cfg.theme));
       }
     }
-    if (d.modules.system && cfg.showInlineNotices && Array.isArray(snap.notices) && snap.notices.length > 0) {
+    if (d.initialized && d.modules.system && cfg.showInlineNotices && Array.isArray(snap.notices) && snap.notices.length > 0) {
       for (const n of snap.notices) {
         parts.push(renderNoticeCard(n, sysTh));
       }
     }
-    if (d.modules.system && cfg.showInlineSystem) {
+    if (d.initialized && d.modules.system && cfg.showInlineSystem) {
       parts.push(renderSystemWindow(snap.sheet, cfg, { mode: "inline", open: cfg.inlineStartsOpen }));
     }
-    if (d.modules.tracker && cfg.showInlineTracker) {
+    if (d.initialized && d.modules.tracker && cfg.showInlineTracker) {
       parts.push(renderTrackerCard(snap.world, cfg, { mode: "inline", open: cfg.inlineStartsOpen }));
+    }
+    if (d.modules.choices && cfg.showInlineChoices && snap.choices && Array.isArray(snap.choices.options) && snap.choices.options.length > 0) {
+      parts.push(renderChoicesCard(snap.choices, cfg.theme, { open: cfg.inlineStartsOpen, snapKey }));
     }
     if (parts.length === 0) return "";
     const extraCls = [
@@ -1840,11 +2031,19 @@ function setup(ctx) {
     return `<div class="wc-inline-wrap${extraCls ? " " + extraCls : ""}" data-wc-theme="${esc(cfg.theme)}"${padStyle}>${parts.join("")}</div>`;
   }
   function syncInlineChatCards() {
-    if (!data || !settings || !data.enabled || !data.initialized) {
+    const choicesReady = Boolean(
+      data && settings && data.enabled && data.modules && data.modules.choices && settings.showInlineChoices &&
+        Object.values(data.snapshots || {}).some((s) => s && s.choices && Array.isArray(s.choices.options) && s.choices.options.length > 0)
+    );
+    if (!data || !settings || !data.enabled || (!data.initialized && !choicesReady)) {
       clearAllInlineCards();
       return;
     }
-    const wantAny = data.modules.system && (settings.showInlineSystem || settings.showInlineNotices) || data.modules.tracker && settings.showInlineTracker || data.modules.dice && settings.showInlineDice;
+    const wantAny =
+      (data.modules.system && (settings.showInlineSystem || settings.showInlineNotices)) ||
+      (data.modules.tracker && settings.showInlineTracker) ||
+      (data.modules.dice && settings.showInlineDice) ||
+      (data.modules.choices && settings.showInlineChoices);
     if (!wantAny) {
       clearAllInlineCards();
       return;
@@ -1860,11 +2059,13 @@ function setup(ctx) {
       mounted = [];
     }
     for (const item of mounted) {
-      const snap = findSnapshotForMessage(data, item.messageId);
-      if (!snap) continue;
+      const found = findSnapshotForMessage(data, item.messageId);
+      if (!found) continue;
+      const snap = found.snap;
+      const snapKey = found.key;
       const effectiveSnap = latestSnap && snap.messageId === latestSnap.messageId ? { ...snap, sheet: data.sheet, world: data.world } : snap;
       const resolved = resolveInlineTarget(item.element, placement);
-      const html = buildInlineHtml(data, settings, effectiveSnap, resolved.padX, resolved.afterIsland);
+      const html = buildInlineHtml(data, settings, effectiveSnap, resolved.padX, resolved.afterIsland, snapKey);
       if (!html) continue;
       activeIds.add(item.messageId);
       const existing = injectedWrappers.get(item.messageId);
@@ -1894,6 +2095,8 @@ function setup(ctx) {
               send("allocate_stat", { stat: btn.dataset.stat, amount: 1 });
             } else if (btn.dataset.act === "auto_alloc") {
               send("auto_allocate");
+            } else if (btn.dataset.act === "choice_pick") {
+              void pickChoice(btn.dataset.key, Number(btn.dataset.idx), btn);
             }
           });
           injectedWrappers.set(item.messageId, {
@@ -2504,6 +2707,27 @@ function setup(ctx) {
              </div>` : `<div class="wc-card"><div class="wc-dim">Rolls use unbiased crypto RNG and automatically bind the AI's next reply.</div></div>`}
     `;
   }
+  function renderChoicesTab(d, cfg) {
+    if (!d.modules.choices) {
+      return renderModuleDisabledCard(
+        "choices",
+        "CYOA Choices",
+        "The What Now? choices card is turned OFF for this chat."
+      );
+    }
+    const latest = findLatestChoices(d);
+    if (!latest) {
+      return `<div class="wc-card">
+        <div class="wc-card-title">What Now?</div>
+        <div class="wc-dim">No choices in the tracked replies yet. When the story ends with a <code>&lt;choices&gt;</code> block (Weft's CYOA), the options appear here and inline under the reply in chat.</div>
+      </div>`;
+    }
+    return `<div class="wc-card">
+      <div class="wc-card-head"><span class="wc-card-title">What Now? · Latest Reply</span><span class="wc-dim">one-shot</span></div>
+      ${renderChoicesCard(latest.snap.choices, cfg.theme, { open: true, snapKey: latest.key })}
+      <div class="wc-dim" style="margin-top:8px">Tapping a choice sends it as your next message. Picked paths are marked and can't be sent twice.</div>
+    </div>`;
+  }
   function renderSettingsContent(d, cfg) {
     const missingPerms = ["interceptor", "generation", "chats", "chat_mutation", "characters", "personas"].filter(
       (p) => !permissions[p]
@@ -2535,6 +2759,10 @@ function setup(ctx) {
                  <span><strong>Fair d20 Dice Roller</strong><small>Real crypto RNG checks & Roll d20 composer button</small></span>
                  <input type="checkbox" data-mod-toggle="dice" ${d.modules.dice ? "checked" : ""} />
                </label>
+               <label class="wc-toggle-row">
+                 <span><strong>CYOA Choices</strong><small>Tappable What Now? card from &lt;choices&gt; blocks — tap sends your next message</small></span>
+                 <input type="checkbox" data-mod-toggle="choices" ${d.modules.choices ? "checked" : ""} />
+               </label>
              </div>` : ""}
 
       <div class="wc-card">
@@ -2554,6 +2782,7 @@ function setup(ctx) {
         <label class="wc-toggle-row"><span>Show System Notifications in chat</span><input type="checkbox" data-cfg="showInlineNotices" ${cfg.showInlineNotices ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Show Story Tracker card in chat</span><input type="checkbox" data-cfg="showInlineTracker" ${cfg.showInlineTracker ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Show Dice Result cards in chat</span><input type="checkbox" data-cfg="showInlineDice" ${cfg.showInlineDice ? "checked" : ""} /></label>
+        <label class="wc-toggle-row"><span>Show CYOA Choice cards in chat</span><input type="checkbox" data-cfg="showInlineChoices" ${cfg.showInlineChoices ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Inline cards start expanded</span><input type="checkbox" data-cfg="inlineStartsOpen" ${cfg.inlineStartsOpen ? "checked" : ""} /></label>
       </div>
 
@@ -2645,7 +2874,9 @@ function setup(ctx) {
       return;
     }
     const pendingRolls = data.modules.dice ? data.rolls.filter((r) => !r.consumed).length : 0;
-    const body = activeSubTab === "system" ? renderSystemTab(data, settings) : activeSubTab === "gear" ? renderGearTab(data, settings) : activeSubTab === "tracker" ? renderTrackerTab(data, settings) : activeSubTab === "dice" ? renderDiceTab(data, settings) : renderSettingsContent(data, settings);
+    const latestChoices = findLatestChoices(data);
+    const unclaimedChoices = latestChoices ? Math.max(0, latestChoices.snap.choices.options.length - (latestChoices.snap.choices.claimed?.length || 0)) : 0;
+    const body = activeSubTab === "system" ? renderSystemTab(data, settings) : activeSubTab === "gear" ? renderGearTab(data, settings) : activeSubTab === "tracker" ? renderTrackerTab(data, settings) : activeSubTab === "dice" ? renderDiceTab(data, settings) : activeSubTab === "choices" ? renderChoicesTab(data, settings) : renderSettingsContent(data, settings);
     drawerTab.root.innerHTML = `
       <div class="wc-root" data-wc-theme="${esc(theme)}">
         <div class="wc-topbar">
@@ -2668,6 +2899,7 @@ function setup(ctx) {
           <button class="wc-tab ${activeSubTab === "gear" ? "is-active" : ""} ${!data.modules.system ? "is-off" : ""}" data-subtab="gear">Gear</button>
           <button class="wc-tab ${activeSubTab === "tracker" ? "is-active" : ""} ${!data.modules.tracker ? "is-off" : ""}" data-subtab="tracker">Tracker</button>
           <button class="wc-tab ${activeSubTab === "dice" ? "is-active" : ""} ${!data.modules.dice ? "is-off" : ""}" data-subtab="dice">Dice${pendingRolls > 0 ? ` <span class="wc-pill">${pendingRolls}</span>` : ""}</button>
+          <button class="wc-tab ${activeSubTab === "choices" ? "is-active" : ""} ${!data.modules.choices ? "is-off" : ""}" data-subtab="choices" title="What Now? — choices from the latest reply">\u25C6 Pick${unclaimedChoices > 0 ? ` <span class="wc-pill">${unclaimedChoices}</span>` : ""}</button>
           <button class="wc-tab ${activeSubTab === "settings" ? "is-active" : ""}" data-subtab="settings" title="Settings">\u2699\uFE0F</button>
         </div>
 
@@ -2739,6 +2971,10 @@ function setup(ctx) {
       }
       case "auto_alloc": {
         send("auto_allocate");
+        return;
+      }
+      case "choice_pick": {
+        void pickChoice(target.dataset.key, Number(target.dataset.idx), target);
         return;
       }
       case "rm_effect": {

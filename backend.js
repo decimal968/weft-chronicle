@@ -69,7 +69,7 @@ function recomputeSheetPools(sheet, opts = {}) {
   return sheet;
 }
 function createDefaultModules() {
-  return { system: true, tracker: true, dice: true };
+  return { system: true, tracker: true, dice: true, choices: true };
 }
 function createDefaultSettings() {
   return {
@@ -89,6 +89,7 @@ function createDefaultSettings() {
     showInlineTracker: true,
     showInlineNotices: true,
     showInlineDice: true,
+    showInlineChoices: true,
     inlineStartsOpen: false,
     inlinePlacement: "inside",
     trackerShowBond: true,
@@ -155,8 +156,12 @@ function createDefaultWorld() {
   };
 }
 function normalizeChatData(data, defaultModules = createDefaultModules()) {
-  if (!data.modules) {
+  if (!data.modules || typeof data.modules !== "object") {
     data.modules = { ...defaultModules };
+  } else {
+    // Merge any missing module keys (e.g. after an extension update) without
+    // overriding the user's explicit on/off choices for this chat.
+    data.modules = { ...defaultModules, ...data.modules };
   }
   if (!Array.isArray(data.notices)) data.notices = [];
   if (!Array.isArray(data.rolls)) data.rolls = [];
@@ -1028,6 +1033,47 @@ function parseJsonDelta(raw) {
   return null;
 }
 
+// src/choices.ts
+// Parses the <choices>…</choices> block the Weft preset emits at the end of an
+// assistant reply (see "CYOA · Choices" in Weft_v4_4.json). The raw block is
+// stored in snapshots so the extension can render its own clickable card inline
+// in the chat, with one-shot claim semantics similar to the preset's native
+// regex-action buttons.
+var MAX_CHOICE_OPTIONS = 6;
+var MAX_CHOICE_TEXT = 400;
+function parseChoicesBlock(raw) {
+  if (!raw || typeof raw !== "string") return null;
+  const blockMatch = raw.match(/<choices\b([^>]*)>([\s\S]*?)<\/choices>/i);
+  if (!blockMatch) return null;
+  const options = [];
+  const optRe = /<c\b([^>]*)>([\s\S]*?)<\/c>/gi;
+  let om;
+  while ((om = optRe.exec(blockMatch[2])) !== null) {
+    if (options.length >= MAX_CHOICE_OPTIONS) break;
+    const oAttrs = om[1] || "";
+    const body = (om[2] || "").trim();
+    if (!body) continue;
+    const kind = ((oAttrs.match(/k\s*=\s*"([^"<>]*)"/i) || [])[1] || "").trim().toLowerCase().slice(0, 24);
+    const heatRaw = ((oAttrs.match(/h\s*=\s*"([^"<>]*)"/i) || [])[1] || "").trim();
+    const heat = heatRaw === "1" || heatRaw === "2" || heatRaw === "3" ? Number(heatRaw) : 0;
+    // Option body shape: *action* "optional spoken line" || stakes || requirement
+    const segs = body.split("||").map((s) => s.trim());
+    const text = (segs[0] || "").trim().slice(0, MAX_CHOICE_TEXT);
+    if (!text) continue;
+    let stakes = "";
+    let req = "";
+    if (segs.length === 2) {
+      stakes = segs[1].slice(0, 200);
+    } else if (segs.length >= 3) {
+      stakes = segs[1].slice(0, 200);
+      req = segs.slice(2).join(" || ").trim().slice(0, 200);
+    }
+    options.push({ kind, heat, text, stakes, req });
+  }
+  if (options.length === 0) return null;
+  return { options, claimed: [] };
+}
+
 // src/backend.ts
 var MAX_SNAPSHOTS = 40;
 var settingsCache = /* @__PURE__ */ new Map();
@@ -1142,7 +1188,7 @@ async function saveChatData(data, userId) {
     spindle.log.warn(`Failed to save chat ${data.chatId}: ${String(err)}`);
   }
 }
-function recordSnapshot(data, messageId, swipeId, turnNotices = [], turnRolls = []) {
+function recordSnapshot(data, messageId, swipeId, turnNotices = [], turnRolls = [], choices = null) {
   const key = `${messageId}:${swipeId}`;
   const snap = {
     messageId,
@@ -1151,7 +1197,8 @@ function recordSnapshot(data, messageId, swipeId, turnNotices = [], turnRolls = 
     sheet: deepClone(data.sheet),
     world: deepClone(data.world),
     notices: deepClone(turnNotices),
-    rolls: deepClone(turnRolls)
+    rolls: deepClone(turnRolls),
+    choices: choices ? deepClone(choices) : null
   };
   data.snapshots[key] = snap;
   data.lastSyncedKey = key;
@@ -1288,21 +1335,24 @@ async function gatherRecentTranscript(chatId, tailCount = 4) {
       msgs = all.slice(-tailCount);
     }
     if (!msgs || msgs.length === 0) {
-      return { transcript: "", tailMessageId: null, tailSwipeId: 0, prevMessageKey: null };
+      return { transcript: "", tailMessageId: null, tailSwipeId: 0, prevMessageKey: null, tailContent: "", tailIsAi: false };
     }
     const isUserMsg = (m) => typeof m.is_user === "boolean" ? m.is_user : m.role === "user";
     const transcript = msgs.map((m) => `${isUserMsg(m) ? "[PLAYER]" : "[AI]"} ${m.name || ""}: ${m.content || ""}`).join("\n\n");
     const tail = msgs[msgs.length - 1];
+    const tailIsAi = !isUserMsg(tail);
     const prevAi = [...msgs.slice(0, -1)].reverse().find((m) => !isUserMsg(m));
     return {
       transcript,
       tailMessageId: tail.id,
       tailSwipeId: tail.swipe_id ?? 0,
-      prevMessageKey: prevAi ? `${prevAi.id}:${prevAi.swipe_id ?? 0}` : null
+      prevMessageKey: prevAi ? `${prevAi.id}:${prevAi.swipe_id ?? 0}` : null,
+      tailContent: tailIsAi && typeof tail.content === "string" ? tail.content : "",
+      tailIsAi
     };
   } catch (err) {
     spindle.log.warn(`getMessages failed for ${chatId}: ${String(err)}`);
-    return { transcript: "", tailMessageId: null, tailSwipeId: 0, prevMessageKey: null };
+    return { transcript: "", tailMessageId: null, tailSwipeId: 0, prevMessageKey: null, tailContent: "", tailIsAi: false };
   }
 }
 async function resolveConnectionId(settings, userId) {
@@ -1419,7 +1469,7 @@ async function runAiBootstrap(chatId, rawUserId) {
       } catch {
       }
     }
-    const { transcript, tailMessageId, tailSwipeId } = await gatherRecentTranscript(chatId, 6);
+    const { transcript, tailMessageId, tailSwipeId, tailContent } = await gatherRecentTranscript(chatId, 6);
     const promptMsgs = buildInitMessages({
       modules: data.modules,
       userName,
@@ -1443,7 +1493,7 @@ async function runAiBootstrap(chatId, rawUserId) {
     data.initialized = false;
     const outcome = applyDelta(data, delta, settings);
     if (tailMessageId) {
-      recordSnapshot(data, tailMessageId, tailSwipeId, outcome.notices, []);
+      recordSnapshot(data, tailMessageId, tailSwipeId, outcome.notices, [], parseChoicesBlock(tailContent));
     }
     await saveChatData(data, userId);
     spindle.toast.success(
@@ -1484,17 +1534,31 @@ async function runDeltaSync(chatId, rawUserId, opts) {
   syncingChats.add(ckey);
   await pushStateToFrontend(chatId, userId, { statusNote: "Syncing turn\u2026" });
   try {
-    const { transcript, tailMessageId, tailSwipeId, prevMessageKey } = await gatherRecentTranscript(chatId, 4);
+    const { transcript, tailMessageId, tailSwipeId, tailContent, prevMessageKey } = await gatherRecentTranscript(chatId, 4);
     const effectiveMsgId = opts?.messageId || tailMessageId;
+    const choices = parseChoicesBlock(tailContent || opts?.fallbackContent || "");
     if (opts?.isSwipeOrRegen && prevMessageKey && data.snapshots[prevMessageKey]) {
       restoreSnapshot(data, prevMessageKey);
     }
     const effectiveTranscript = transcript || (opts?.fallbackContent ? `[AI]: ${opts.fallbackContent}` : "");
     if (!effectiveTranscript.trim()) return;
     const promptMsgs = buildDeltaMessages(data, effectiveTranscript);
-    const raw = await runSidecarLlm(promptMsgs, settings, userId);
-    const delta = parseJsonDelta(raw);
+    let raw;
+    let sidecarError = null;
+    try {
+      raw = await runSidecarLlm(promptMsgs, settings, userId);
+    } catch (err) {
+      sidecarError = err;
+    }
+    const delta = sidecarError ? null : parseJsonDelta(raw);
     if (!delta) {
+      // Even if the sidecar failed, keep the <choices> card for this turn —
+      // it costs nothing and does not depend on the sidecar at all.
+      if (effectiveMsgId && choices) {
+        recordSnapshot(data, effectiveMsgId, tailSwipeId, [], [], choices);
+        await saveChatData(data, userId);
+      }
+      if (sidecarError) throw sidecarError;
       if (opts?.manual) {
         spindle.toast.warning("Could not parse state delta JSON from sidecar model.", { userId });
       }
@@ -1510,7 +1574,7 @@ async function runDeltaSync(chatId, rawUserId, opts) {
       }
     }
     if (effectiveMsgId) {
-      recordSnapshot(data, effectiveMsgId, tailSwipeId, outcome.notices, resolvedThisTurn);
+      recordSnapshot(data, effectiveMsgId, tailSwipeId, outcome.notices, resolvedThisTurn, choices);
     }
     await saveChatData(data, userId);
     if (outcome.leveledUp) {
@@ -1657,9 +1721,10 @@ spindle.on("GENERATION_ENDED", async (payload, rawUserId) => {
         resolved.push(r);
       }
     }
-    if (resolved.length > 0) {
+    const choicesOnly = payload.messageId ? parseChoicesBlock(payload.content || "") : null;
+    if (resolved.length > 0 || choicesOnly) {
       if (payload.messageId) {
-        recordSnapshot(data, payload.messageId, 0, [], resolved);
+        recordSnapshot(data, payload.messageId, 0, [], resolved, choicesOnly);
       }
       await saveChatData(data, userId);
       await pushStateToFrontend(payload.chatId, userId);
@@ -1733,7 +1798,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
       case "toggle_module": {
         if (!activeChatId) return;
         const mod = msg.module;
-        if (mod !== "system" && mod !== "tracker" && mod !== "dice") return;
+        if (mod !== "system" && mod !== "tracker" && mod !== "dice" && mod !== "choices") return;
         const data = await loadChatData(activeChatId, userId);
         data.modules[mod] = Boolean(msg.enabled);
         await saveChatData(data, userId);
@@ -2219,6 +2284,36 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         );
         await saveChatData(fresh, userId);
         await pushStateToFrontend(activeChatId, userId, { statusNote: "Chat state reset" });
+        return;
+      }
+      case "choice_claim": {
+        if (!activeChatId) return;
+        const key = typeof msg.key === "string" ? msg.key : "";
+        const index = Number(msg.index);
+        const data = await loadChatData(activeChatId, userId);
+        const snap = data.snapshots?.[key];
+        if (!snap || !snap.choices || !Array.isArray(snap.choices.options)) return;
+        if (!Number.isInteger(index) || index < 0 || index >= snap.choices.options.length) return;
+        if (!Array.isArray(snap.choices.claimed)) snap.choices.claimed = [];
+        if (!snap.choices.claimed.includes(index)) {
+          snap.choices.claimed.push(index);
+          await saveChatData(data, userId);
+        }
+        await pushStateToFrontend(activeChatId, userId, {
+          statusNote: `Choice sent: ${String(snap.choices.options[index]?.text || "").slice(0, 80)}`
+        });
+        return;
+      }
+      case "choice_feedback": {
+        if (!activeChatId) return;
+        const kind = typeof msg.kind === "string" ? msg.kind : "";
+        if (kind === "copied") {
+          spindle.toast.info("Choice copied to the clipboard — paste it into the composer and press Send.", { userId });
+        } else if (kind === "busy") {
+          spindle.toast.warning("A generation is still running — try the choice again when it finishes.", { userId });
+        } else if (kind === "error") {
+          spindle.toast.error("Could not send or copy the choice. Check the composer and try again.", { userId });
+        }
         return;
       }
       case "import_json": {
