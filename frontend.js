@@ -578,11 +578,21 @@ function setup(ctx) {
     interceptor: false,
     generation: false,
     chats: false,
+    chat_mutation: false,
     characters: false,
     personas: false
   };
   let syncing = false;
   let statusNote = "";
+  function getActiveConnectionId() {
+    try {
+      const active = ctx.connections?.getActive?.()?.activeProfileId;
+      if (active) return active;
+    } catch {
+    }
+    const def = connections.find((c) => c.isDefault) || connections[0];
+    return def?.id || null;
+  }
   const rollDraft = {
     action: "",
     stat: "dex",
@@ -608,7 +618,8 @@ function setup(ctx) {
   });
   cleanups.push(() => rollAction.destroy());
   function send(type, extra = {}) {
-    ctx.sendToBackend({ type, chatId, ...extra });
+    const activeConnectionId = getActiveConnectionId();
+    ctx.sendToBackend({ type, chatId, activeConnectionId, ...extra });
   }
   function updateBadge() {
     if (!data || !data.enabled) {
@@ -1411,10 +1422,13 @@ Find antibiotics">${esc(obsText)}</textarea>
   function renderDiceConfigTab(d, cfg) {
     const pending = d.rolls.filter((r) => !r.consumed);
     const autoGear = computeMaxGearBonus(d.sheet);
-    const missingPerms = ["interceptor", "generation", "chats", "characters", "personas"].filter(
+    const missingPerms = ["interceptor", "generation", "chats", "chat_mutation", "characters", "personas"].filter(
       (p) => !permissions[p]
     );
     const snapCount = Object.keys(d.snapshots || {}).length;
+    const activeConnId = getActiveConnectionId();
+    const activeConnObj = connections.find((c) => c.id === activeConnId) || connections.find((c) => c.isDefault);
+    const activeConnLabel = activeConnObj ? `Use Active Connection (${activeConnObj.name})` : "Use Active Default Connection";
     return `
       <div class="wc-card">
         <div class="wc-card-head">
@@ -1487,7 +1501,7 @@ Find antibiotics">${esc(obsText)}</textarea>
         <div class="wc-field">
           <label>Sidecar LLM Connection (for Auto-Sync & Init)</label>
           <select class="wc-select" id="wc-cfg-conn">
-            <option value="" ${!cfg.sidecarConnectionId ? "selected" : ""}>Use Active Default Connection</option>
+            <option value="" ${!cfg.sidecarConnectionId ? "selected" : ""}>${esc(activeConnLabel)}</option>
             ${connections.map(
       (c) => `<option value="${esc(c.id)}" ${cfg.sidecarConnectionId === c.id ? "selected" : ""}>${esc(c.name)} (${esc(c.provider)} \xB7 ${esc(c.model)})</option>`
     ).join("")}
@@ -1739,7 +1753,7 @@ Find antibiotics">${esc(obsText)}</textarea>
       }
       case "req_perms": {
         const missing = ["interceptor", "generation", "chats", "chat_mutation", "characters", "personas"].filter(
-          (p) => p === "chat_mutation" || !permissions[p]
+          (p) => !permissions[p]
         );
         try {
           await ctx.permissions.request([...missing], {

@@ -808,7 +808,8 @@ ${recentTranscript.slice(-4500)}`;
 }
 function parseJsonDelta(raw) {
   if (!raw || typeof raw !== "string") return null;
-  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const withoutThinking = raw.replace(/<(?:think|thought|reasoning)>[\s\S]*?<\/(?:think|thought|reasoning)>/gi, "").trim();
+  const stripped = withoutThinking.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
   const tryParse = (s) => {
     try {
       const parsed = JSON.parse(s);
@@ -816,6 +817,14 @@ function parseJsonDelta(raw) {
         return parsed;
       }
     } catch {
+      try {
+        const cleaned = s.replace(/,\s*([}\]])/g, "$1");
+        const parsed = JSON.parse(cleaned);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+          return parsed;
+        }
+      } catch {
+      }
     }
     return null;
   };
@@ -851,18 +860,22 @@ var MAX_SNAPSHOTS = 40;
 var settingsCache = /* @__PURE__ */ new Map();
 var chatCache = /* @__PURE__ */ new Map();
 var activeChatByUser = /* @__PURE__ */ new Map();
+var activeConnByUser = /* @__PURE__ */ new Map();
 var lastUserByChat = /* @__PURE__ */ new Map();
+var lastKnownUserId;
 var syncingChats = /* @__PURE__ */ new Set();
 var interceptorDisposer = null;
 function rememberUserForChat(chatId, userId) {
-  if (chatId && userId && userId.trim()) {
-    lastUserByChat.set(chatId, userId.trim());
-    return userId.trim();
+  if (userId && userId.trim()) {
+    const uid = userId.trim();
+    lastKnownUserId = uid;
+    if (chatId) lastUserByChat.set(chatId, uid);
+    return uid;
   }
   if (chatId) {
-    return lastUserByChat.get(chatId);
+    return lastUserByChat.get(chatId) || lastKnownUserId;
   }
-  return userId;
+  return lastKnownUserId;
 }
 function userKey(userId) {
   return userId && userId.trim() ? userId.trim() : "__default__";
@@ -984,6 +997,7 @@ function getPermissionFlags() {
     interceptor: spindle.permissions.has("interceptor"),
     generation: spindle.permissions.has("generation"),
     chats: spindle.permissions.has("chats"),
+    chat_mutation: spindle.permissions.has("chat_mutation"),
     characters: spindle.permissions.has("characters"),
     personas: spindle.permissions.has("personas")
   };
@@ -992,18 +1006,19 @@ async function listConnectionsSafe(userId) {
   if (!spindle.permissions.has("generation")) return [];
   try {
     const list = await spindle.connections.list(userId);
-    return list.map((c) => ({
+    return list.filter((c) => Boolean(c?.id)).map((c) => ({
       id: c.id,
-      name: c.name || c.model || c.provider,
-      provider: c.provider,
-      model: c.model,
+      name: c.name || c.model || c.provider || "Unnamed Connection",
+      provider: c.provider || "",
+      model: c.model || "",
       isDefault: Boolean(c.is_default)
     }));
   } catch {
     return [];
   }
 }
-async function pushStateToFrontend(chatId, userId, extra) {
+async function pushStateToFrontend(chatId, rawUserId, extra) {
+  const userId = rememberUserForChat(chatId, rawUserId);
   const settings = await loadSettings(userId);
   const data = chatId ? await loadChatData(chatId, userId) : null;
   const connections = await listConnectionsSafe(userId);
@@ -1014,6 +1029,7 @@ async function pushStateToFrontend(chatId, userId, extra) {
     settings,
     connections,
     permissions: getPermissionFlags(),
+    activeConnectionId: activeConnByUser.get(userKey(userId)) || null,
     syncing: chatId ? syncingChats.has(chatCacheKey(userId, chatId)) : false,
     statusNote: extra?.statusNote
   };
@@ -1027,34 +1043,69 @@ function extractTextFromGenerationResult(res) {
   if (typeof res === "string") return res;
   if (!res || typeof res !== "object") return "";
   const obj = res;
-  if (typeof obj.content === "string") return obj.content;
+  const extractContentValue = (val) => {
+    if (typeof val === "string") return val;
+    if (Array.isArray(val)) {
+      return val.map((part) => {
+        if (typeof part === "string") return part;
+        if (part && typeof part === "object") {
+          const p = part;
+          if (p.type === "text" && typeof p.text === "string") return p.text;
+          if (typeof p.text === "string") return p.text;
+        }
+        return "";
+      }).filter(Boolean).join("\n");
+    }
+    return "";
+  };
+  const directContent = extractContentValue(obj.content);
+  if (directContent) return directContent;
   if (typeof obj.text === "string") return obj.text;
   if (obj.message && typeof obj.message === "object") {
-    const msg = obj.message;
-    if (typeof msg.content === "string") return msg.content;
+    const mc = extractContentValue(obj.message.content);
+    if (mc) return mc;
   }
   if (Array.isArray(obj.choices) && obj.choices.length > 0) {
     const first = obj.choices[0];
     if (first?.message && typeof first.message === "object") {
-      const mc = first.message.content;
-      if (typeof mc === "string") return mc;
+      const mc = extractContentValue(first.message.content);
+      if (mc) return mc;
     }
     if (typeof first?.text === "string") return first.text;
   }
   return "";
 }
 async function gatherRecentTranscript(chatId, tailCount = 4) {
-  if (!spindle.permissions.has("chats")) {
+  if (!spindle.permissions.has("chat_mutation")) {
     return { transcript: "", tailMessageId: null, tailSwipeId: 0, prevMessageKey: null };
   }
   try {
-    const msgs = await spindle.chat.getMessages(chatId, { tail: tailCount });
+    let msgs = [];
+    const supportsLean = Boolean(
+      spindle.host?.capabilities?.["chat-lean-messages-v1"]
+    );
+    if (supportsLean) {
+      try {
+        msgs = await spindle.chat.getMessages(chatId, {
+          tail: tailCount,
+          light: true,
+          includeExtra: false
+        });
+      } catch {
+        const all = await spindle.chat.getMessages(chatId);
+        msgs = all.slice(-tailCount);
+      }
+    } else {
+      const all = await spindle.chat.getMessages(chatId);
+      msgs = all.slice(-tailCount);
+    }
     if (!msgs || msgs.length === 0) {
       return { transcript: "", tailMessageId: null, tailSwipeId: 0, prevMessageKey: null };
     }
-    const transcript = msgs.map((m) => `${m.is_user ? "[PLAYER]" : "[AI]"} ${m.name || ""}: ${m.content || ""}`).join("\n\n");
+    const isUserMsg = (m) => typeof m.is_user === "boolean" ? m.is_user : m.role === "user";
+    const transcript = msgs.map((m) => `${isUserMsg(m) ? "[PLAYER]" : "[AI]"} ${m.name || ""}: ${m.content || ""}`).join("\n\n");
     const tail = msgs[msgs.length - 1];
-    const prevAi = [...msgs.slice(0, -1)].reverse().find((m) => !m.is_user);
+    const prevAi = [...msgs.slice(0, -1)].reverse().find((m) => !isUserMsg(m));
     return {
       transcript,
       tailMessageId: tail.id,
@@ -1066,28 +1117,76 @@ async function gatherRecentTranscript(chatId, tailCount = 4) {
     return { transcript: "", tailMessageId: null, tailSwipeId: 0, prevMessageKey: null };
   }
 }
+async function resolveConnectionId(settings, userId) {
+  if (settings.sidecarConnectionId && settings.sidecarConnectionId.trim()) {
+    return settings.sidecarConnectionId.trim();
+  }
+  const uiActive = activeConnByUser.get(userKey(userId));
+  if (uiActive) {
+    return uiActive;
+  }
+  try {
+    const list = await spindle.connections.list(userId);
+    const valid = list.filter((c) => Boolean(c?.id && c?.provider));
+    const picked = valid.find((c) => c.is_default) || valid.find((c) => c.has_api_key) || valid[0] || list.find((c) => c.is_default) || list[0];
+    if (picked?.id) return picked.id;
+  } catch {
+  }
+  return void 0;
+}
 async function runSidecarLlm(messages, settings, userId) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 45e3);
+  const timer = setTimeout(() => controller.abort(), 55e3);
   try {
-    const req = {
-      type: "raw",
+    const connectionId = await resolveConnectionId(settings, userId);
+    const quietReq = {
+      type: "quiet",
       messages,
       parameters: {
         temperature: 0.15,
-        max_tokens: 950
+        max_tokens: 1400
       },
       reasoning: { source: "off" },
       signal: controller.signal
     };
     if (userId) {
-      req.userId = userId;
+      quietReq.userId = userId;
     }
-    if (settings.sidecarConnectionId) {
-      req.connection_id = settings.sidecarConnectionId;
+    if (connectionId) {
+      quietReq.connection_id = connectionId;
     }
-    const result = await spindle.generate.raw(req);
-    return extractTextFromGenerationResult(result);
+    try {
+      const result = await spindle.generate.quiet(quietReq);
+      return extractTextFromGenerationResult(result);
+    } catch (quietErr) {
+      if (connectionId) {
+        try {
+          const rawReq = {
+            type: "raw",
+            messages,
+            connection_id: connectionId,
+            parameters: {
+              temperature: 0.15,
+              max_tokens: 1400
+            },
+            reasoning: { source: "off" },
+            signal: controller.signal
+          };
+          if (userId) rawReq.userId = userId;
+          const rawResult = await spindle.generate.raw(rawReq);
+          return extractTextFromGenerationResult(rawResult);
+        } catch {
+          throw quietErr;
+        }
+      }
+      const msg = quietErr instanceof Error ? quietErr.message : String(quietErr);
+      if (/unknown provider/i.test(msg)) {
+        throw new Error(
+          "No active LLM connection profile found. Open Dice \u2192 Configuration and select a Sidecar LLM Connection."
+        );
+      }
+      throw quietErr;
+    }
   } finally {
     clearTimeout(timer);
   }
@@ -1259,6 +1358,10 @@ function ensureInterceptorRegistered() {
     async (messages, context) => {
       if (!context.chatId) return messages;
       rememberUserForChat(context.chatId, context.userId);
+      const dispatchedConnId = context.mainDispatch?.descriptor?.connectionId;
+      if (dispatchedConnId && context.userId) {
+        activeConnByUser.set(userKey(context.userId), dispatchedConnId);
+      }
       if (context.generationType === "quiet" || context.generationType === "impersonate") {
         return messages;
       }
@@ -1288,6 +1391,14 @@ spindle.on("PERMISSION_CHANGED", () => {
   ensureInterceptorRegistered();
   for (const [uid, chatId] of activeChatByUser.entries()) {
     void pushStateToFrontend(chatId, uid === "__default__" ? void 0 : uid);
+  }
+});
+spindle.on("CONNECTION_PROFILE_LOADED", (payload, rawUserId) => {
+  const obj = payload || {};
+  const connId = typeof obj.connectionId === "string" ? obj.connectionId : typeof obj.profileId === "string" ? obj.profileId : typeof obj.id === "string" ? obj.id : null;
+  const userId = rememberUserForChat(null, rawUserId);
+  if (connId && userId) {
+    activeConnByUser.set(userKey(userId), connId);
   }
 });
 spindle.on("CHAT_SWITCHED", async (payload, rawUserId) => {
@@ -1382,6 +1493,11 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
   if (reqChatId) {
     activeChatByUser.set(userKey(userId), reqChatId);
     rememberUserForChat(reqChatId, userId);
+  } else {
+    rememberUserForChat(null, userId);
+  }
+  if (typeof msg.activeConnectionId === "string" && msg.activeConnectionId.trim()) {
+    activeConnByUser.set(userKey(userId), msg.activeConnectionId.trim());
   }
   try {
     switch (type) {
