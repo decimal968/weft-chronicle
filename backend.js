@@ -1,4 +1,4 @@
-/* weft-chronicle v2.4.1 — bundle built from src/ (see repository) */
+/* weft-chronicle v2.4.2 — bundle built from src/ (see repository) */
 
 // src/backend/choices.ts
 /*! src/backend/choices.ts */

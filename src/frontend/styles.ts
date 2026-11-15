@@ -1099,4 +1099,13 @@ export var WEFT_CHRONICLE_CSS = `
 .wc-modal { padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--lumiverse-text, inherit); }
 .wc-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .wc-dice-loot { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--wc-accent); margin-top: 2px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Settings-section accordions */
+.wc-acc-h { appearance: none; background: transparent; border: none; width: 100%; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; font: inherit; color: inherit; border-radius: 6px; }
+.wc-acc-h:hover .wc-card-title { color: var(--wc-text); }
+.wc-acc-r { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.wc-acc-h .wc-ic { opacity: 0.55; transition: transform 0.18s ease; }
+.wc-acc-h.is-collapsed .wc-ic { transform: rotate(-90deg); }
+.wc-card.is-collapsed { gap: 0; padding-bottom: 10px; }
+.wc-card.is-collapsed > *:not(.wc-acc-h) { display: none; }
+.wc-acc-h:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
 `

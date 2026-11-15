@@ -5,6 +5,27 @@ All notable changes to Weft Chronicle are documented here. The format follows
 [Semantic Versioning](https://semver.org/). `spindle.json` is the version source
 of truth; `package.json` and this file are kept in lockstep by CI.
 
+## [2.4.2] - 2026-11-15
+
+UI polish from on-device feedback.
+
+### Changed
+
+- **Quick-roll is back to one entry point**: the redundant d20 button next to
+  Sync in the drawer topbar was removed; the composer's Roll d20 input action
+  (and the Dice tab) remain.
+- **Settings icon no longer reads as a sun** — the thin-spoked cog was
+  replaced with a sliders icon.
+- **Settings tab is calmer**: every section (Modules, Inline Cards, Theme &
+  Appearance, AI Connection & Sync, Survival & Scene Clock, Recent Syncs,
+  Settings, Backup & Reset) is now a collapsible accordion; only Modules is
+  open by default. Collapse state persists across re-renders.
+
+### Fixed
+
+- Tab buttons emitted corrupted `data-subtab` attributes (junk tokens from a
+  bad regex) — harmless in browsers, invalid HTML. Cleaned.
+
 ## [2.4.1] - 2026-11-15
 
 Hotfix: the host's backend capability scanner rejected v2.4.0 on load

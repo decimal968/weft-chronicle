@@ -1,4 +1,4 @@
-/* weft-chronicle v2.4.1 — bundle built from src/ (see repository) */
+/* weft-chronicle v2.4.2 — bundle built from src/ (see repository) */
 
 // src/frontend/engine.ts
 /*! src/frontend/engine.ts */
@@ -75,7 +75,8 @@ var ICON_PATHS = {
   map: '<path d="M9 4L3 6.3v13.5L9 17.8l6 2 6-2.3V4L15 6.3 9 4z"/><path d="M9 4v13.8M15 6.3v13.5"/>',
   d20: '<path d="M12 2.6l8.1 4.7v9.4L12 21.4l-8.1-4.7V7.3z"/><path d="M12 7.2l4.3 2.5v4.9L12 17.1l-4.3-2.5V9.7z"/>',
   chat: '<path d="M4.5 6.3A2.3 2.3 0 0 1 6.8 4h10.4a2.3 2.3 0 0 1 2.3 2.3v6.9a2.3 2.3 0 0 1-2.3 2.3H9.7l-5.2 4.6z"/>',
-  cog: '<circle cx="12" cy="12" r="3.05"/><path d="M12 2.6v3.2M12 18.2v3.2M2.6 12h3.2M18.2 12h3.2M5 5l2.3 2.3M16.7 16.7L19 19M19 5l-2.3 2.3M7.3 16.7L5 19"/>',
+  sliders: '<path d="M4 7.5h8M16.5 7.5H20M4 16.5h4M12.5 16.5H20"/><circle cx="14.2" cy="7.5" r="2.1"/><circle cx="10.2" cy="16.5" r="2.1"/>',
+  chev: '<path d="M6 9.5l6 6 6-6"/>',
   gem: '<path d="M7.2 3.5h9.6l4 6-8.8 11-8.8-11z"/><path d="M3.2 9.5h17.6M12 20.5L8.4 9.5 12 3.5l3.6 6z"/>',
   spark: '<path d="M12 3l1.9 5.2 5.2 1.9-5.2 1.9L12 17.2l-1.9-5.2-5.2-1.9 5.2-1.9z"/>',
   sparkles: '<path d="M10.5 5l1.5 3.9 3.9 1.5-3.9 1.5-1.5 3.9-1.5-3.9L5.1 10.4 9 8.9z"/><path d="M18.5 3l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8z"/><path d="M19 15l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
@@ -1847,6 +1848,15 @@ var WEFT_CHRONICLE_CSS = `
 .wc-modal { padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--lumiverse-text, inherit); }
 .wc-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .wc-dice-loot { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--wc-accent); margin-top: 2px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Settings-section accordions */
+.wc-acc-h { appearance: none; background: transparent; border: none; width: 100%; text-align: left; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 0; font: inherit; color: inherit; border-radius: 6px; }
+.wc-acc-h:hover .wc-card-title { color: var(--wc-text); }
+.wc-acc-r { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.wc-acc-h .wc-ic { opacity: 0.55; transition: transform 0.18s ease; }
+.wc-acc-h.is-collapsed .wc-ic { transform: rotate(-90deg); }
+.wc-card.is-collapsed { gap: 0; padding-bottom: 10px; }
+.wc-card.is-collapsed > *:not(.wc-acc-h) { display: none; }
+.wc-acc-h:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
 `;
 
 // src/frontend/frontend.ts
@@ -3055,6 +3065,11 @@ function setup(ctx) {
       </div>
     `;
   }
+  var settingsAccCollapsed = /* @__PURE__ */ new Set([2, 3, 4, 5, 6, 7, 8]);
+  function accHead(id, title, hintRight) {
+    const collapsed = settingsAccCollapsed.has(id);
+    return `<button type="button" class="wc-card-head wc-acc-h${collapsed ? " is-collapsed" : ""}" data-acc="${id}" aria-expanded="${!collapsed}"><span class="wc-card-title">${title}</span><span class="wc-acc-r">${hintRight ? `<span class="wc-dim">${hintRight}</span>` : ""}${icon("chev", 15)}</span></button>`;
+  }
   var noticeFilter = "all";
   var NOTICE_FILTERS = [
     ["all", "All"],
@@ -3377,11 +3392,8 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
                <button class="wc-btn is-primary is-xs" data-act="req_perms">Grant</button>
              </div>` : ""}
 
-      ${d ? `<div class="wc-card">
-               <div class="wc-card-head">
-                 <span class="wc-card-title">Modules (This Chat)</span>
-                 <span class="wc-dim">Toggle any module off independently</span>
-               </div>
+      ${d ? `<div class="wc-card${settingsAccCollapsed.has(1) ? " is-collapsed" : ""}">
+               ${accHead(1, "Modules (This Chat)", "Toggle any module off independently")}
                <label class="wc-toggle-row">
                  <span><strong>System Window</strong><small>Stats, HP/SP/XP, Gear, Quests & System Notices</small></span>
                  <input type="checkbox" data-mod-toggle="system" ${d.modules.system ? "checked" : ""} />
@@ -3400,11 +3412,8 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
                </label>
              </div>` : ""}
 
-      <div class="wc-card">
-        <div class="wc-card-head">
-          <span class="wc-card-title">Inline Cards Inside Chat</span>
-          <span class="wc-dim">Rendered with AI replies</span>
-        </div>
+      <div class="wc-card${settingsAccCollapsed.has(2) ? " is-collapsed" : ""}">
+        ${accHead(2, "Inline Cards Inside Chat", "Rendered with AI replies")}
         <div class="wc-field">
           <label>Card Placement</label>
           <select class="wc-select" id="wc-cfg-placement">
@@ -3422,8 +3431,8 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
         <label class="wc-toggle-row"><span>Inline cards start expanded</span><input type="checkbox" data-cfg="inlineStartsOpen" ${cfg.inlineStartsOpen ? "checked" : ""} /></label>
       </div>
 
-      <div class="wc-card">
-        <div class="wc-card-head"><span class="wc-card-title">Theme & Appearance</span></div>
+      <div class="wc-card${settingsAccCollapsed.has(3) ? " is-collapsed" : ""}">
+        ${accHead(3, "Theme & Appearance")}
         <div class="wc-row-2">
           <div class="wc-field">
             <label>Card & Panel Theme</label>
@@ -3457,11 +3466,8 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
         </div>
       </div>
 
-      <div class="wc-card">
-        <div class="wc-card-head">
-          <span class="wc-card-title">AI Connection & Sync</span>
-          <span class="wc-dim">${snapCount} swipe snap${snapCount === 1 ? "" : "s"}</span>
-        </div>
+      <div class="wc-card${settingsAccCollapsed.has(4) ? " is-collapsed" : ""}">
+        ${accHead(4, "AI Connection & Sync", `${snapCount} swipe snap${snapCount === 1 ? "" : "s"}`)}
         <div class="wc-field">
           <label>Sidecar LLM Connection (for Auto-Sync & Init)</label>
           <select class="wc-select" id="wc-cfg-conn">
@@ -3521,11 +3527,8 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
         <label class="wc-toggle-row"><span>Enable automatically in new chats</span><input type="checkbox" data-cfg="enabledByDefault" ${cfg.enabledByDefault ? "checked" : ""} /></label>
       </div>
 
-      <div class="wc-card">
-        <div class="wc-card-head">
-          <span class="wc-card-title">Survival & Scene Clock</span>
-          <span class="wc-dim">off by default</span>
-        </div>
+      <div class="wc-card${settingsAccCollapsed.has(5) ? " is-collapsed" : ""}">
+        ${accHead(5, "Survival & Scene Clock", "off by default")}
 
         <div class="wc-card-title" style="margin-top:2px;">${icon("compass", 13)} Survival (Loot & Encounters)</div>
         <label class="wc-toggle-row"><span>Enable survival rolls in this profile <small>Dice tab buttons + roll quick actions; seeded by chat + date</small></span><input type="checkbox" data-cfg="survivalEnabled" ${cfg.survivalEnabled ? "checked" : ""} /></label>
@@ -3562,8 +3565,8 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
         <div class="wc-dim" style="margin:-4px 0 6px">Phase words only \u2014 day rolls over at midnight. Off-ladder (custom) weather text is never touched. Time advances only on synced turns; nothing moves while you edit or read.</div>
       </div>
 
-      ${d && Array.isArray(d.syncLog) && d.syncLog.length > 0 ? `<div class="wc-card">
-               <div class="wc-card-head"><span class="wc-card-title">Recent Syncs</span><span class="wc-dim">last ${Math.min(8, d.syncLog.length)}</span></div>
+      ${d && Array.isArray(d.syncLog) && d.syncLog.length > 0 ? `<div class="wc-card${settingsAccCollapsed.has(6) ? " is-collapsed" : ""}">
+               ${accHead(6, "Recent Syncs", `last ${Math.min(8, d.syncLog.length)}`)}
                ${d.spend && d.spend.calls > 0 ? `<div class="wc-dim" style="margin-bottom:6px">Sidecar spend (this chat): <b>${d.spend.calls}</b> call${d.spend.calls === 1 ? "" : "s"} \xB7 \u2248<b>${d.spend.totalTokens}</b> tokens (est. chars\xF74 \u2014 ${d.spend.promptTokens} prompt / ${d.spend.completionTokens} completion)</div>` : ""}
                <div class="wc-synclog">
                  ${d.syncLog.slice(-8).reverse().map((e) => `
@@ -3574,16 +3577,16 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
                </div>
              </div>` : ""}
 
-      <div class="wc-card">
-        <div class="wc-card-head"><span class="wc-card-title">Settings (This Profile)</span><span class="wc-dim">share a tuned config</span></div>
+      <div class="wc-card${settingsAccCollapsed.has(7) ? " is-collapsed" : ""}">
+        ${accHead(7, "Settings (This Profile)", "share a tuned config")}
         <div class="wc-actions-row">
           <button class="wc-btn is-xs" data-act="modal_add" data-kind="export_settings">Export Settings</button>
           <button class="wc-btn is-xs" data-act="modal_add" data-kind="import_settings">Import Settings\u2026</button>
         </div>
       </div>
 
-      ${d ? `<div class="wc-card">
-               <div class="wc-card-head"><span class="wc-card-title">Backup & Reset (This Chat)</span></div>
+      ${d ? `<div class="wc-card${settingsAccCollapsed.has(8) ? " is-collapsed" : ""}">
+               ${accHead(8, "Backup & Reset (This Chat)")}
                <div class="wc-actions-row" style="justify-content:space-between;">
                  <div class="wc-actions-row">
                    <button class="wc-btn is-xs" data-act="modal_add" data-kind="export">Export JSON</button>
@@ -3666,17 +3669,16 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
           <div class="wc-actions-row">
             <button class="wc-btn is-xs" data-act="toggle_chat" title="Pause or resume all modules for this chat">${data.enabled ? "On" : "Off"}</button>
             <button class="wc-btn is-xs ${syncErr ? "is-danger" : "is-primary"}" data-act="sync_now" ${syncing || !data.enabled ? "disabled" : ""} title="${syncErr ? "Retry the failed sync" : "Sync state from the latest reply"}">${syncing ? "\u2026" : syncErr ? "Retry" : "Sync"}</button>
-            ${data.modules.dice ? `<button class="wc-btn is-xs" data-act="quick_roll" title="Roll Fair d20" aria-label="Roll Fair d20">${icon("d20", 15)}</button>` : ""}
           </div>
         </div>
 
         <div class="wc-tabs" aria-label="Weft Chronicle sections">
-          <button class="wc-tab ${activeSubTab === "system" ? "is-active" : ""} ${!data.modules.system ? "is-off" : ""}" data-subtab="system"system"}">${icon("system", 14)}<span>System</span>${data.modules.system && data.sheet.pts > 0 ? ` <span class="wc-pill">+${data.sheet.pts}</span>` : ""}</button>
-          <button class="wc-tab ${activeSubTab === "gear" ? "is-active" : ""} ${!data.modules.system ? "is-off" : ""}" data-subtab="gear"gear"}">${icon("shield", 14)}<span>Gear</span></button>
-          <button class="wc-tab ${activeSubTab === "tracker" ? "is-active" : ""} ${!data.modules.tracker ? "is-off" : ""}" data-subtab="tracker"tracker"}">${icon("map", 14)}<span>Tracker</span></button>
-          <button class="wc-tab ${activeSubTab === "dice" ? "is-active" : ""} ${!data.modules.dice ? "is-off" : ""}" data-subtab="dice"dice"}">${icon("d20", 14)}<span>Dice</span>${pendingRolls > 0 ? ` <span class="wc-pill">${pendingRolls}</span>` : ""}</button>
-          <button class="wc-tab ${activeSubTab === "choices" ? "is-active" : ""} ${!data.modules.choices ? "is-off" : ""}" data-subtab="choices"choices"}" title="What Now? \u2014 choices from the latest reply">${icon("chat", 14)}<span>Pick</span>${unclaimedChoices > 0 ? ` <span class="wc-pill">${unclaimedChoices}</span>` : ""}</button>
-          <button class="wc-tab wc-tab-icon ${activeSubTab === "settings" ? "is-active" : ""}" data-subtab="settings"settings"}" title="Settings" aria-label="Settings">${icon("cog", 16)}</button>
+          <button class="wc-tab ${activeSubTab === "system" ? "is-active" : ""} ${!data.modules.system ? "is-off" : ""}" data-subtab="system">${icon("system", 14)}<span>System</span>${data.modules.system && data.sheet.pts > 0 ? ` <span class="wc-pill">+${data.sheet.pts}</span>` : ""}</button>
+          <button class="wc-tab ${activeSubTab === "gear" ? "is-active" : ""} ${!data.modules.system ? "is-off" : ""}" data-subtab="gear">${icon("shield", 14)}<span>Gear</span></button>
+          <button class="wc-tab ${activeSubTab === "tracker" ? "is-active" : ""} ${!data.modules.tracker ? "is-off" : ""}" data-subtab="tracker">${icon("map", 14)}<span>Tracker</span></button>
+          <button class="wc-tab ${activeSubTab === "dice" ? "is-active" : ""} ${!data.modules.dice ? "is-off" : ""}" data-subtab="dice">${icon("d20", 14)}<span>Dice</span>${pendingRolls > 0 ? ` <span class="wc-pill">${pendingRolls}</span>` : ""}</button>
+          <button class="wc-tab ${activeSubTab === "choices" ? "is-active" : ""} ${!data.modules.choices ? "is-off" : ""}" data-subtab="choices" title="What Now? \u2014 choices from the latest reply">${icon("chat", 14)}<span>Pick</span>${unclaimedChoices > 0 ? ` <span class="wc-pill">${unclaimedChoices}</span>` : ""}</button>
+          <button class="wc-tab wc-tab-icon ${activeSubTab === "settings" ? "is-active" : ""}" data-subtab="settings" title="Settings" aria-label="Settings">${icon("sliders", 15)}</button>
         </div>
 
         ${body}
@@ -3686,6 +3688,18 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
     scheduleInlineSync(80);
   }
   const handleClick = async (ev) => {
+    const acc = ev.target?.closest("[data-acc]");
+    if (acc) {
+      const id = Number(acc.dataset.acc);
+      if (settingsAccCollapsed.has(id)) settingsAccCollapsed.delete(id);
+      else settingsAccCollapsed.add(id);
+      const collapsed = settingsAccCollapsed.has(id);
+      acc.classList.toggle("is-collapsed", collapsed);
+      acc.setAttribute("aria-expanded", String(!collapsed));
+      const card = acc.closest(".wc-card");
+      if (card) card.classList.toggle("is-collapsed", collapsed);
+      return;
+    }
     const target = ev.target?.closest("[data-act], [data-subtab]");
     if (!target) return;
     const sub = target.dataset.subtab;
@@ -3720,10 +3734,6 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
       }
       case "init_ai": {
         send("init_from_ai");
-        return;
-      }
-      case "quick_roll": {
-        openQuickRollModal();
         return;
       }
       case "edit_identity": {

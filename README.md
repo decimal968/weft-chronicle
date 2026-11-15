@@ -1,6 +1,10 @@
-# Weft Chronicle v2.4.1
+# Weft Chronicle v2.4.2
 
 **Weft Chronicle** is a full-stack **Lumiverse Spindle** extension designed specifically for **Weft** presets (such as `Weft_v4_4.json`), bringing **authentic Weft UI** and **100% deterministic RPG + Story Tracker + Fair Dice mechanics** natively into Lumiverse.
+
+## ✨ What's New in v2.4.2
+
+- **UI polish after on-device review**: one quick-roll entry point (topbar d20 removed; composer Roll d20 remains), the Settings icon is now a sliders glyph (no longer reads as a sun), and the **Settings tab is collapsible** — sections fold into accordions with only Modules open by default. Tab-button markup cleaned up.
 
 ## ✨ Hotfix in v2.4.1
 
