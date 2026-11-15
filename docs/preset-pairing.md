@@ -18,7 +18,7 @@ also render its own cards, or you get duplicates.
 
 | Weft preset variable | Why |
 |---|---|
-| `cyoa: 1` (and `cyoa_count`, etc.) | The model must keep emitting the `<choices>` block; the **extension** renders it as a tappable "What now?" card and sends your pick. Disabling the prompt block kills the feature. |
+| `cyoa: 1` (and `cyoa_count`, etc.) | Only needed if the extension's **Ask the model for a <choices> block** toggle is off (Settings → Inline Cards) — that toggle is ON by default since v2.4.3 and makes Weft request the block itself. If both are on, the model is instructed twice but emits a single block; harmless. |
 
 Display-only preset scripts are optional: the preset's `CYOA · choices`,
 `CYOA · auto-asterisk` and `CYOA · action italics` regex scripts duplicate the
@@ -67,9 +67,13 @@ Weft Chronicle does not render `<NPC_Inner_Chatter>` blocks.
 - **Duplicate System Windows** — the preset's `System window` variable is still
   ON. Turn it OFF; the extension card is the only one you want.
 - **Dice rolled twice** — same for the preset's `Dice` variable.
-- **Choices card never appears** — `cyoa` is OFF in the preset, or the last
-  reply had no `<choices>` block (the model sometimes skips it on short
-  replies). The ◆ Pick tab tells you when there's nothing to show.
+- **Choices card never appears** — the model did not emit a `<choices>` block:
+  the preset's `cyoa` is off AND the extension's **Ask the model for a
+  <choices> block** toggle is off (Settings → Inline Cards), or the reply was
+  too short and the model skipped it. Note the CYOA instruction exists only
+  when the injected state block is active (Settings → AI Connection → Prompt
+  injection / lean budget still applies). The ◆ Pick tab tells you when
+  there's nothing to show.
 - **NPC ignores your stats** — working as intended; the injected block states
   meters are the player's private knowledge. If the model still metagames,
   reinforce in the preset's card/character sheet.

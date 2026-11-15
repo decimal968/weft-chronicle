@@ -1,4 +1,4 @@
-/* weft-chronicle v2.4.2 — bundle built from src/ (see repository) */
+/* weft-chronicle v2.4.3 — bundle built from src/ (see repository) */
 
 // src/frontend/engine.ts
 /*! src/frontend/engine.ts */
@@ -2107,6 +2107,42 @@ function setup(ctx) {
   function isInsideOurInjection(el) {
     return Boolean(el.closest(".wc-inline-wrap"));
   }
+  function isDisplayedElement(el) {
+    if (!el || !el.isConnected) return false;
+    try {
+      const cs = window.getComputedStyle(el);
+      if (cs.display === "none" || cs.visibility === "hidden" || cs.contentVisibility === "hidden") return false;
+    } catch {
+      return false;
+    }
+    const rects = el.getClientRects();
+    if (!rects || rects.length === 0) return false;
+    try {
+      const r = rects[0];
+      if (r.width === 0 && r.height === 0) return false;
+      if (r.right < 0 || r.left > (window.innerWidth || 0)) return false;
+    } catch {
+    }
+    return !el.hasAttribute("hidden") && el.getAttribute("aria-hidden") !== "true";
+  }
+  function readSwipeIndex(el) {
+    if (!el) return null;
+    try {
+      const candidates = el.querySelectorAll('[class*="swipe" i], [class*="pager" i], [data-swipe-id], [data-swipe]');
+      for (const node of candidates) {
+        const attr = node.getAttribute("data-swipe-id") || node.getAttribute("data-swipe");
+        if (attr !== null && attr !== "") {
+          const n = parseInt(attr, 10);
+          if (Number.isFinite(n)) return n;
+        }
+        const t = (node.textContent || "").trim();
+        const m = t.match(/^(\d+)\s*\/\s*(\d+)$/);
+        if (m) return Math.max(0, parseInt(m[1], 10) - 1);
+      }
+    } catch {
+    }
+    return null;
+  }
   function readHorizontalPadding(el) {
     if (!el) return null;
     try {
@@ -2131,7 +2167,7 @@ function setup(ctx) {
   }
   function resolveInlineTarget(bubbleEl, placement) {
     if (placement === "below") {
-      return { target: bubbleEl, position: "beforeend", padX: null, afterIsland: false };
+      return { target: bubbleEl, position: "afterend", padX: null, afterIsland: false };
     }
     if (placement === "footer") {
       const bodyAfter2 = bubbleEl.querySelector('[data-spindle-mount="message_body_after"]');
@@ -2265,9 +2301,31 @@ function setup(ctx) {
     } catch {
       mounted = [];
     }
+    const visibleById = /* @__PURE__ */ new Map();
+    for (const item of mounted || []) {
+      if (!item || !item.element || typeof item.messageId !== "string" || !item.messageId) continue;
+      if (!isDisplayedElement(item.element)) continue;
+      if (!visibleById.has(item.messageId)) visibleById.set(item.messageId, item);
+    }
+    mounted = Array.from(visibleById.values());
+    const dropWrapper = (mid) => {
+      const existing = injectedWrappers.get(mid);
+      if (existing) {
+        try {
+          ctx.dom.uninject(existing.wrapper);
+        } catch {
+        }
+        injectedWrappers.delete(mid);
+      }
+    };
     for (const item of mounted) {
       const found = findSnapshotForMessage(data, item.messageId);
       if (!found) continue;
+      const currentSwipe = readSwipeIndex(item.element);
+      if (currentSwipe !== null && typeof found.snap?.swipeId === "number" && found.snap.swipeId !== currentSwipe) {
+        dropWrapper(item.messageId);
+        continue;
+      }
       const snap = found.snap;
       const snapKey = found.key;
       const effectiveSnap = snap;
@@ -2316,13 +2374,9 @@ function setup(ctx) {
         }
       }
     }
-    for (const [mid, entry] of injectedWrappers.entries()) {
+    for (const [mid] of injectedWrappers.entries()) {
       if (!activeIds.has(mid) && !findSnapshotForMessage(data, mid)) {
-        try {
-          ctx.dom.uninject(entry.wrapper);
-        } catch {
-        }
-        injectedWrappers.delete(mid);
+        dropWrapper(mid);
       }
     }
   }
@@ -3378,11 +3432,20 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
       <div class="wc-dim" style="margin-top:8px">Tapping a choice sends it as your next message. Picked paths are marked and can't be sent twice.</div>
     </div>`;
   }
+  function nearestOption(value, options) {
+    const v = Number(value);
+    if (!Number.isFinite(v)) return options[0];
+    return options.reduce((best, o) => Math.abs(o - v) < Math.abs(best - v) ? o : best, options[0]);
+  }
   function renderSettingsContent(d, cfg) {
     const missingPerms = ["interceptor", "generation", "chats", "chat_mutation", "characters", "personas"].filter(
       (p) => !permissions[p]
     );
     const snapCount = d ? Object.keys(d.snapshots || {}).length : 0;
+    const TC_OPTS = [1500, 3e3, 5e3, 8e3, 12e3, 2e4];
+    const MT_OPTS = [600, 1e3, 1400, 2200, 4e3, 6e3];
+    const tcVal = nearestOption(cfg.transcriptCap || 8e3, TC_OPTS);
+    const mtVal = nearestOption(cfg.sidecarMaxTokens || 2200, MT_OPTS);
     const activeConnId = getActiveConnectionId();
     const activeConnObj = connections.find((c) => c.id === activeConnId) || connections.find((c) => c.isDefault);
     const activeConnLabel = activeConnObj ? `Use Active Connection (${activeConnObj.name})` : "Use Active Default Connection";
@@ -3417,9 +3480,9 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
         <div class="wc-field">
           <label>Card Placement</label>
           <select class="wc-select" id="wc-cfg-placement">
-            <option value="inside" ${cfg.inlinePlacement !== "below" && cfg.inlinePlacement !== "footer" ? "selected" : ""}>Inside message body (with What Now?)</option>
-            <option value="footer" ${cfg.inlinePlacement === "footer" ? "selected" : ""}>Message footer (below divider, above swipe)</option>
-            <option value="below" ${cfg.inlinePlacement === "below" ? "selected" : ""}>Below message card</option>
+            <option value="below" ${cfg.inlinePlacement === "below" || cfg.inlinePlacement !== "inside" && cfg.inlinePlacement !== "footer" ? "selected" : ""}>Below message card (recommended)</option>
+            <option value="footer" ${cfg.inlinePlacement === "footer" ? "selected" : ""}>Message footer (above swipe pager)</option>
+            <option value="inside" ${cfg.inlinePlacement === "inside" ? "selected" : ""}>Inside message body</option>
           </select>
         </div>
         <label class="wc-toggle-row"><span>Show System Window card in chat</span><input type="checkbox" data-cfg="showInlineSystem" ${cfg.showInlineSystem ? "checked" : ""} /></label>
@@ -3428,6 +3491,7 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
         <label class="wc-toggle-row"><span>Show Dice Result cards in chat</span><input type="checkbox" data-cfg="showInlineDice" ${cfg.showInlineDice ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Compact dice cards (one line)</span><input type="checkbox" data-cfg="inlineDiceCompact" ${cfg.inlineDiceCompact ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Show CYOA Choice cards in chat</span><input type="checkbox" data-cfg="showInlineChoices" ${cfg.showInlineChoices ? "checked" : ""} /></label>
+        <label class="wc-toggle-row"><span>Ask the model for a &lt;choices&gt; block (CYOA even with the preset's CYOA off)</span><input type="checkbox" data-cfg="injectChoicePrompt" ${cfg.injectChoicePrompt !== false ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Inline cards start expanded</span><input type="checkbox" data-cfg="inlineStartsOpen" ${cfg.inlineStartsOpen ? "checked" : ""} /></label>
       </div>
 
@@ -3503,6 +3567,21 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
             <option value="lean" ${cfg.promptBudget === "lean" ? "selected" : ""}>Lean (~half the tokens)</option>
           </select>
         </div>
+        <div class="wc-row-2">
+          <div class="wc-field">
+            <label>Sidecar Context (per sync)</label>
+            <select class="wc-select" id="wc-cfg-transcriptcap" title="How much of the recent chat the state-sync call reads. Lower = cheaper and faster, but the sync sees fewer past turns.">
+              ${TC_OPTS.map((v) => `<option value="${v}" ${tcVal === v ? "selected" : ""}>${v === 1500 ? "Tight" : v === 3e3 ? "Lean" : v === 5e3 ? "Medium" : v === 8e3 ? "Standard" : v === 12e3 ? "Long" : "Max"} (~${(v / 1e3).toFixed(1)}k chars)</option>`).join("")}
+            </select>
+          </div>
+          <div class="wc-field">
+            <label>Max Sidecar Output</label>
+            <select class="wc-select" id="wc-cfg-sidecarmaxtok" title="Token cap for the state-sync reply. Tightening this saves output tokens; 600 is enough for a small delta.">
+              ${MT_OPTS.map((v) => `<option value="${v}" ${mtVal === v ? "selected" : ""}>${v.toLocaleString()} tok${v === 2200 ? " (default)" : ""}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <div class="wc-dim" style="margin:-6px 0 8px">Sidecar = the small non-streaming call after each reply that updates HP/stats/tracker (never the story). Pick a small, fast Connection above \u2014 that matters more than these caps.</div>
         <div class="wc-dim" style="margin:-6px 0 8px">
           ${promptEstimate ? promptEstimate.tokens > 0 ? `Live prompt block: \u2248<b>${promptEstimate.tokens}</b> tokens (${promptEstimate.chars} chars \xF7 4), injected once per generation.` : `Live prompt block: empty right now \u2014 nothing gets injected for this chat's current settings.` : "Live prompt cost appears after the next state refresh."}
         </div>
@@ -4011,6 +4090,14 @@ ${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
     }
     if (el.id === "wc-cfg-budget") {
       send("update_settings", { patch: { promptBudget: el.value } });
+      return;
+    }
+    if (el.id === "wc-cfg-transcriptcap") {
+      send("update_settings", { patch: { transcriptCap: Number(el.value) } });
+      return;
+    }
+    if (el.id === "wc-cfg-sidecarmaxtok") {
+      send("update_settings", { patch: { sidecarMaxTokens: Number(el.value) } });
       return;
     }
     if (el.id === "wc-cfg-xpcurve") {

@@ -5,6 +5,39 @@ All notable changes to Weft Chronicle are documented here. The format follows
 [Semantic Versioning](https://semver.org/). `spindle.json` is the version source
 of truth; `package.json` and this file are kept in lockstep by CI.
 
+## [2.4.3] - 2026-11-15
+
+Chat-inline card fixes from on-device review.
+
+### Changed
+
+- **Card placement now defaults to "Below message card"** and the `below`
+  placement was fixed to inject *after* the message row (it previously fell
+  back to injecting inside the bubble, duplicating the `inside` path).
+  Persisted `inside` configs are migrated to `below` (inside produced broken
+  layouts on Hermitcrab/Lumiverse: cards clipped at the screen edge).
+- **Sidecar cost knobs are now in the UI** (Settings → AI Connection & Sync):
+  Sidecar Context (~1.5k–20k chars read per sync) and Max Sidecar Output
+  (600–6,000 tokens). Pair a small fast Connection with these to make the
+  per-turn state call effectively free. Existing configs keep their values
+  (8000 / 2200).
+- **CYOA no longer requires the preset's `cyoa` variable.** When the CYOA
+  Choices module is on, Weft Chronicle now asks the model for a `<choices>`
+  block itself via the injected state block (new setting
+  `injectChoicePrompt`, default on, toggle: Settings → Inline Cards → "Ask the
+  model for a <choices> block"). Pairing note: preset `cyoa` can stay off.
+
+### Fixed
+
+- **Duplicate inline cards**: the host keeps hidden swipe siblings in the DOM;
+  the extension injected a second copy of every card into them, producing the
+  clipped half-visible duplicate at the screen edge. Inline cards now only
+  inject into displayed message elements, one element per message id.
+- **Tracker/system/choice cards flash on swipe switches to unsynced turns**:
+  when the visible message element exposes its swipe index (pager "2 / 3"),
+  cards only paint for the snapshot recorded for that swipe; a regenerated
+  or swiped-to turn shows nothing until its own sync completes.
+
 ## [2.4.2] - 2026-11-15
 
 UI polish from on-device feedback.

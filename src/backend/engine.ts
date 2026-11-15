@@ -115,7 +115,10 @@ export function createDefaultSettings() {
     showInlineDice: true,
     showInlineChoices: true,
     inlineStartsOpen: false,
-    inlinePlacement: "inside",
+    // "below" (sibling after the message row) is the most robust across hosts;
+    // "inside" injection broke layouts on Hermitcrab/Lumiverse.
+    inlinePlacement: "below",
+    injectChoicePrompt: true,
     trackerShowBond: true,
     trackerShowSpark: true,
     trackerShowHeat: true,

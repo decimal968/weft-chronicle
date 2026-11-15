@@ -1,6 +1,11 @@
-# Weft Chronicle v2.4.2
+# Weft Chronicle v2.4.3
 
 **Weft Chronicle** is a full-stack **Lumiverse Spindle** extension designed specifically for **Weft** presets (such as `Weft_v4_4.json`), bringing **authentic Weft UI** and **100% deterministic RPG + Story Tracker + Fair Dice mechanics** natively into Lumiverse.
+
+## ✨ What's New in v2.4.3
+
+- **Inline cards fixed for real hosts**: hidden swipe copies of cards are gone, "Below message card" placement actually places below the message (now the default), and cards no longer flash stale state on swiped turns before sync completes.
+- **CYOA works without the preset**: Weft now asks the model for the `<choices>` block itself (new toggle in Settings → Inline Cards), so the preset's `cyoa` variable can be off.
 
 ## ✨ What's New in v2.4.2
 

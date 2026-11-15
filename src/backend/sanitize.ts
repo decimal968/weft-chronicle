@@ -1331,13 +1331,20 @@ export function buildPromptBlock(data, settings) {
   if (!data.enabled || !settings.injectPrompt) return null;
   const wantSystem = data.modules.system && settings.includeSheetInPrompt && data.initialized;
   const wantTracker = data.modules.tracker && settings.includeWorldInPrompt && data.initialized;
+  // Even if the preset's CYOA is off, the extension can ask for the block itself.
+  const wantChoices = data.modules.choices && settings.injectChoicePrompt !== false;
   const pendingRolls = data.modules.dice && settings.includeRollsInPrompt ? data.rolls.filter((r) => !r.consumed) : [];
   const lean = settings.promptBudget === "lean";
-  if (!wantSystem && !wantTracker && pendingRolls.length === 0) return null;
+  if (!wantSystem && !wantTracker && !wantChoices && pendingRolls.length === 0) return null;
   const lines = ["<weft_chronicle_state>"];
   lines.push(
     "Authoritative state tracked externally by Weft Chronicle. Honor these injuries, gear, NPC feelings/thoughts, and rolled outcomes in prose without quoting raw stats, HP, XP, or dice numbers in story text. Lines marked [NPC-private] are for consistency only — never narrate the secret or quote the thought directly; let them shape behavior. HP 0 means the character is down/unconscious and cannot act until stabilized. Bond/Spark/Heat meters belong to the player's knowledge — NPCs act on their own wants, not on the meters. If an Unspent pts count is listed, the character has attribute points ready to allocate — a natural training or development opening may exist in the story if they seek it. Do NOT emit <Status>, <World_State>, or fake <Dice> XML tags \u2014 the extension displays them automatically."
   );
+  if (wantChoices) {
+    // Weft asks for the block itself so CYOA works even with the preset's
+    // cyoa variable off. Format must stay in sync with parseChoicesBlock().
+    lines.push('[CYOA] End your reply with exactly one <choices> block and nothing after it — 4 distinct, in-character next moves in this exact format: <choices><c k="tag" h="2">*action* "optional spoken line" || what could go wrong</c> ...</choices>. k is a short lowercase intent tag (talk, sneak, fight, study, flee...). h is 1|2|3 for how risky the move is. Each option body stays under 90 characters, starts with an asterisk-wrapped action, and may carry an optional spoken line in quotes. If your own instructions already demand a <choices> block, follow them and emit only one block. Never emit the block anywhere except as the very last thing in your reply.');
+  }
   if (wantSystem) {
     const s = data.sheet;
     const identity = [s.name, `Lv ${s.level}`, s.race, s.cls, s.subcls, s.rank ? `Rank ${s.rank}` : ""].filter(Boolean).join(" \xB7 ");

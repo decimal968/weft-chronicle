@@ -99,6 +99,10 @@ async function loadSettings(userId) {
         ...stored?.defaultModules || {}
       }
     };
+    // "inside" injection produced broken layouts on real hosts (cards clipped
+    // at screen edge / message column squeezed). Migrate persisted configs
+    // once; the user can re-select Inside in Settings if their host behaves.
+    if (merged.inlinePlacement === "inside") merged.inlinePlacement = "below";
     settingsCache.set(key, merged);
     return merged;
   } catch {
