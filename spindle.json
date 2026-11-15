@@ -1,0 +1,21 @@
+{
+  "version": "1.0.0",
+  "name": "Weft Chronicle",
+  "identifier": "weft_chronicle",
+  "author": "decimal968",
+  "github": "https://github.com/decimal968/weft-chronicle",
+  "homepage": "https://github.com/decimal968/weft-chronicle",
+  "description": "Deterministic RPG System Window, Inventory, Quests, World State & NPC Tracker, and fair RNG Dice Roller built for Lumiverse & Weft presets.",
+  "permissions": [
+    "interceptor",
+    "generation",
+    "chats",
+    "chat_mutation",
+    "characters",
+    "personas"
+  ],
+  "entry_backend": "backend.js",
+  "entry_frontend": "frontend.js",
+  "minimum_lumiverse_version": "0.1.0",
+  "interceptorTimeoutMs": 15000
+}
