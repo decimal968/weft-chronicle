@@ -62,8 +62,30 @@ function loadBackendWithHost(host) {
   globalThis.spindle = host.spindle;
   const resolved = require.resolve(path.join("..", "backend.js"));
   delete require.cache[resolved];
-  process.env.WEFT_TEST = "1";
-  return require(resolved);
+  require(resolved);
+  return host;
 }
 
-module.exports = { createMockHost, loadBackendWithHost };
+
+// Load the pure internals from SOURCE (not the shipped bundle) for unit tests.
+// The production bundle deliberately contains no module.exports/process hooks
+// so the host capability scanner sees nothing it can object to.
+function loadInternals() {
+  const esbuild = require("esbuild");
+  const entry = path.join(__dirname, "internals-entry.ts");
+  const result = esbuild.buildSync({
+    entryPoints: [entry],
+    bundle: true,
+    write: false,
+    format: "cjs",
+    platform: "node",
+    target: "es2020",
+    logLevel: "silent"
+  });
+  const code = result.outputFiles[0].text;
+  const mod = { exports: {} };
+  new Function("module", "exports", "require", code)(mod, mod.exports, require);
+  return mod.exports;
+}
+
+module.exports = { createMockHost, loadBackendWithHost, loadInternals };

@@ -1767,12 +1767,3 @@ spindle.log.info("Weft Chronicle v2 backend initialized.");
 
 // Test hook — plain `node --test` loads this bundle with a stubbed `spindle`
 // global and reads these internals. Inert inside the host (module is unused).
-if (typeof module !== "undefined" && module.exports && typeof process !== "undefined" && process.env && process.env.WEFT_TEST === "1") {
-  module.exports = {
-    STAT_KEYS, DEFAULT_STAT_LABELS, clamp, statModifier, computePools, recomputeSheetPools,
-    performDiceRoll, evaluateVerdict, fairD20, normalizeRollStat, parseJsonDelta,
-    sanitizeImportedState, normalizeChatData, autoAllocateAllPoints, parseAllocPriority,
-    allocateStatPoint, tickEffectsInPlace, bshStage, applyDelta, parseChoicesBlock,
-    createDefaultSheet, createDefaultWorld, createDefaultModules, createDefaultChatData
-  };
-}

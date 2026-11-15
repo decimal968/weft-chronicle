@@ -2,10 +2,8 @@
 // Sidecar-delta parsing and import sanitizing — the two places untrusted text enters.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createMockHost, loadBackendWithHost } = require("./mock-host.js");
-
-const host = createMockHost();
-const b = loadBackendWithHost(host);
+const { loadInternals } = require("./mock-host.js");
+const b = loadInternals();
 
 test("parseJsonDelta: plain JSON object", () => {
   assert.deepEqual(b.parseJsonDelta('{"a":1}'), { a: 1 });

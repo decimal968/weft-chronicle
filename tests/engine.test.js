@@ -2,10 +2,8 @@
 // Pure-core unit tests for the committed backend bundle.
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { createMockHost, loadBackendWithHost } = require("./mock-host.js");
-
-const host = createMockHost();
-const b = loadBackendWithHost(host);
+const { loadInternals } = require("./mock-host.js");
+const b = loadInternals();
 
 test("statModifier bands match the Weft preset table exactly", () => {
   // preset: 1-2 -2, 3-4 -1, 5-6 0, 7-8 +1, 9-10 +2, 11-12 +3, 13-14 +4, 15-16 +5, 17+ +6

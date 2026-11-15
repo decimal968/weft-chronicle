@@ -1,4 +1,4 @@
-/* weft-chronicle v2.4.0 — bundle built from src/ (see repository) */
+/* weft-chronicle v2.4.1 — bundle built from src/ (see repository) */
 
 // src/backend/choices.ts
 /*! src/backend/choices.ts */
@@ -3875,31 +3875,3 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
   }
 });
 spindle.log.info("Weft Chronicle v2 backend initialized.");
-if (typeof module !== "undefined" && module.exports && typeof process !== "undefined" && process.env && process.env.WEFT_TEST === "1") {
-  module.exports = {
-    STAT_KEYS,
-    DEFAULT_STAT_LABELS,
-    clamp,
-    statModifier,
-    computePools,
-    recomputeSheetPools,
-    performDiceRoll,
-    evaluateVerdict,
-    fairD20,
-    normalizeRollStat,
-    parseJsonDelta,
-    sanitizeImportedState,
-    normalizeChatData,
-    autoAllocateAllPoints,
-    parseAllocPriority,
-    allocateStatPoint,
-    tickEffectsInPlace,
-    bshStage,
-    applyDelta,
-    parseChoicesBlock,
-    createDefaultSheet,
-    createDefaultWorld,
-    createDefaultModules,
-    createDefaultChatData
-  };
-}

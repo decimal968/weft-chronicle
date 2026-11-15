@@ -5,6 +5,16 @@ All notable changes to Weft Chronicle are documented here. The format follows
 [Semantic Versioning](https://semver.org/). `spindle.json` is the version source
 of truth; `package.json` and this file are kept in lockstep by CI.
 
+## [2.4.1] - 2026-11-15
+
+Hotfix: the host's backend capability scanner rejected v2.4.0 on load
+("dangerous process API usage"). Root cause: a test-only `module.exports`
+block guarded by `process.env.WEFT_TEST` lived in the shipped bundle so the
+node-based test runner could reach the internals. The bundle now contains no
+`process` / `module.exports` / CommonJS references at all; unit tests load
+the pure internals straight from source via esbuild instead. No behavior
+change; identical API surface.
+
 ## [2.4.0] - 2026-11-15
 
 The "survival & scene clock" release: two opt-in modules for long-running

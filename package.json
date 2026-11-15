@@ -1,6 +1,6 @@
 {
   "name": "weft-chronicle",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "private": true,
   "description": "Authentic Weft System Window + Story Tracker + Fair RNG dice for Lumiverse (Spindle extension)",
   "scripts": {

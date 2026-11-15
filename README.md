@@ -1,6 +1,10 @@
-# Weft Chronicle v2.4.0
+# Weft Chronicle v2.4.1
 
 **Weft Chronicle** is a full-stack **Lumiverse Spindle** extension designed specifically for **Weft** presets (such as `Weft_v4_4.json`), bringing **authentic Weft UI** and **100% deterministic RPG + Story Tracker + Fair Dice mechanics** natively into Lumiverse.
+
+## ✨ Hotfix in v2.4.1
+
+- The host's backend capability scanner rejected v2.4.0 ("dangerous process API usage") — a test-only `process.env.WEFT_TEST` export shim lived in the shipped bundle. Removed; the bundle is now 100% clean of `process`/`module.exports`/CommonJS references. No behavior change.
 
 ## ✨ What's New in v2.4.0
 

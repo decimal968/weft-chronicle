@@ -1,4 +1,4 @@
-/* weft-chronicle v2.4.0 — bundle built from src/ (see repository) */
+/* weft-chronicle v2.4.1 — bundle built from src/ (see repository) */
 
 // src/frontend/engine.ts
 /*! src/frontend/engine.ts */
