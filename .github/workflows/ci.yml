@@ -1,0 +1,39 @@
+name: CI
+on:
+  push:
+    branches: ["main", "arena/**"]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Install dev dependencies
+        run: npm ci
+      - name: Typecheck (src/ is TypeScript)
+        run: npm run typecheck
+      - name: Bundles are reproducible from src/
+        run: |
+          npm run build
+          git diff --exit-code backend.js frontend.js || {
+            echo "Bundles are out of date — run 'npm run build' and commit the result."
+            exit 1
+          }
+      - name: Syntax-check committed bundles
+        run: |
+          node --check backend.js
+          node --check frontend.js
+      - name: Unit + RPC tests (mock host)
+        run: node --test
+      - name: Manifest and README versions agree
+        run: |
+          MANIFEST=$(node -p "require('./spindle.json').version")
+          PKG=$(node -p "require('./package.json').version")
+          test "$MANIFEST" = "$PKG" || { echo "spindle.json ($MANIFEST) != package.json ($PKG)"; exit 1; }
+          grep -q "v$MANIFEST" README.md || { echo "README.md does not mention v$MANIFEST"; exit 1; }
+          grep -q "## \[$MANIFEST\]" CHANGELOG.md || { echo "CHANGELOG.md is missing a [$MANIFEST] section"; exit 1; }

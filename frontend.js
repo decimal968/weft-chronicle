@@ -1,4 +1,7 @@
-// src/engine.ts
+/* weft-chronicle v2.4.0 — bundle built from src/ (see repository) */
+
+// src/frontend/engine.ts
+/*! src/frontend/engine.ts */
 var STAT_KEYS = ["str", "dex", "int", "cha", "con", "wis"];
 var DC_PRESETS = [
   { dc: 5, label: "Trivial (5)" },
@@ -64,7 +67,46 @@ function computeMaxGearBonus(sheet) {
   return clamp(best, 0, 3);
 }
 
-// src/cards.ts
+// src/frontend/icons.ts
+/*! src/frontend/icons.ts — shared inline SVG icon set (stroke-based, currentColor) */
+var ICON_PATHS = {
+  system: '<rect x="3.5" y="4.5" width="17" height="11.5" rx="2"/><path d="M9.5 20h5M12 16v4"/>',
+  shield: '<path d="M12 3l7 2.9v5.3c0 4.7-3 9.1-7 10.8-4-1.7-7-6.1-7-10.8V5.9z"/>',
+  map: '<path d="M9 4L3 6.3v13.5L9 17.8l6 2 6-2.3V4L15 6.3 9 4z"/><path d="M9 4v13.8M15 6.3v13.5"/>',
+  d20: '<path d="M12 2.6l8.1 4.7v9.4L12 21.4l-8.1-4.7V7.3z"/><path d="M12 7.2l4.3 2.5v4.9L12 17.1l-4.3-2.5V9.7z"/>',
+  chat: '<path d="M4.5 6.3A2.3 2.3 0 0 1 6.8 4h10.4a2.3 2.3 0 0 1 2.3 2.3v6.9a2.3 2.3 0 0 1-2.3 2.3H9.7l-5.2 4.6z"/>',
+  cog: '<circle cx="12" cy="12" r="3.05"/><path d="M12 2.6v3.2M12 18.2v3.2M2.6 12h3.2M18.2 12h3.2M5 5l2.3 2.3M16.7 16.7L19 19M19 5l-2.3 2.3M7.3 16.7L5 19"/>',
+  gem: '<path d="M7.2 3.5h9.6l4 6-8.8 11-8.8-11z"/><path d="M3.2 9.5h17.6M12 20.5L8.4 9.5 12 3.5l3.6 6z"/>',
+  spark: '<path d="M12 3l1.9 5.2 5.2 1.9-5.2 1.9L12 17.2l-1.9-5.2-5.2-1.9 5.2-1.9z"/>',
+  sparkles: '<path d="M10.5 5l1.5 3.9 3.9 1.5-3.9 1.5-1.5 3.9-1.5-3.9L5.1 10.4 9 8.9z"/><path d="M18.5 3l.8 2.1 2.1.8-2.1.8-.8 2.1-.8-2.1-2.1-.8 2.1-.8z"/><path d="M19 15l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
+  star: '<path d="M12 2.8l2.8 5.8 6.3.8-4.7 4.3 1.2 6.2L12 17.4l-5.6 3.5 1.2-6.2-4.7-4.3 6.3-.8z"/>',
+  crosshair: '<circle cx="12" cy="12" r="7.2"/><path d="M12 2v4.4M12 17.6V22M2 12h4.4M17.6 12H22"/><circle cx="12" cy="12" r="1.3" fill="currentColor" stroke="none"/>',
+  bag: '<path d="M6.2 8h11.6l1.3 11.2a2 2 0 0 1-2 2.3H6.9a2 2 0 0 1-2-2.3z"/><path d="M9.3 10.8V6.7a2.7 2.7 0 0 1 5.4 0v4.1"/>',
+  compass: '<circle cx="12" cy="12" r="8.4"/><path d="M15.2 8.8l-1.8 4.6-4.6 1.8 1.8-4.6z"/>',
+  clock: '<circle cx="12" cy="12" r="8.4"/><path d="M12 7.2V12l3.2 2.1"/>',
+  timer: '<circle cx="12" cy="13.2" r="7.4"/><path d="M12 9.6v3.8l2.4 1.5M9.3 2.6h5.4"/>',
+  lock: '<rect x="5" y="10.4" width="14" height="9.4" rx="2.2"/><path d="M8.2 10.4V7.8a3.8 3.8 0 0 1 7.6 0v2.6"/>',
+  check: '<path d="M4.5 12.6l5.1 5L19.7 6"/>',
+  zap: '<path d="M13 2L5.5 13.5H11L10 22l7.5-11.5H12z"/>',
+  arrow: '<path d="M4.5 12h15M13.5 6l6 6-6 6"/>',
+  warn: '<path d="M12 3.6L22 20.5H2z"/><path d="M12 10v4.6M12 17.6h.01"/>',
+  eye: '<path d="M2.5 12S6.5 5.8 12 5.8 21.5 12 21.5 12 17.5 18.2 12 18.2 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/>'
+};
+function icon(name, size) {
+  const px = Math.max(10, Math.min(24, Number(size) || 14));
+  const body = ICON_PATHS[name];
+  if (!body) return "";
+  return `<svg class="wc-ic" width="${px}" height="${px}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
+}
+
+// src/frontend/cards.ts
+/*! src/frontend/cards.ts */
+function escXml(val) {
+  return String(val ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+function escXmlAttr(val) {
+  return escXml(val).replace(/"/g, "&quot;");
+}
 function esc(val) {
   return String(val ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 }
@@ -78,41 +120,46 @@ function resolveSystemTheme(settings) {
   return settings.theme;
 }
 function arcSegments(label) {
-  const s = (label || "").toLowerCase();
-  if (/opening|setup|calm|arrival/.test(s)) return 1;
-  if (/rising|build|tension|invest/.test(s)) return 2;
-  if (/turning|escal|crisis|twist/.test(s)) return 3;
-  if (/climax|confront|peak|combat|intim/.test(s)) return 4;
-  if (/fallout|aftermath|resol|epilog/.test(s)) return 5;
+  const s = (label || "").toLowerCase().trim();
+  const ladders = [
+    ["opening", "setup", "calm", "arrival", "early simmer"],
+    ["rising", "building", "escalation", "invest", "escal", "simmer"],
+    ["turning", "complication", "midpoint tension", "tension", "twist"],
+    ["climax", "crisis", "confrontation", "peak", "combat", "intimacy"],
+    ["fallout", "resolution", "breather", "aftermath", "resolve", "epilog"]
+  ];
+  for (let i = 0; i < ladders.length; i++) {
+    if (ladders[i].some((k) => s.includes(k))) return i + 1;
+  }
   return 2;
 }
 function noticeIcon(kind) {
   switch (kind) {
     case "levelup":
-      return "\u2605";
+      return icon("star", 18);
     case "quest":
-      return "\u2726";
+      return icon("spark", 18);
     case "item":
-      return "\u25C6";
+      return icon("gem", 18);
     case "skill":
-      return "\u2727";
+      return icon("zap", 18);
     case "change":
-      return "\u25B2";
+      return icon("arrow", 18);
     default:
-      return "!";
+      return icon("warn", 18);
   }
 }
 function verdictClass(verdict) {
   if (verdict === "nat 20") return "is-crit";
-  if (verdict === "success") return "is-good";
-  if (verdict === "success, at a cost") return "is-warn";
+  if (verdict === "success" || verdict === "win") return "is-good";
+  if (verdict === "success, at a cost" || verdict === "tie") return "is-warn";
   return "is-bad";
 }
 function renderNoticeCard(notice, theme) {
   return `
-    <div class="wc-msn" data-wc-theme="${esc(theme)}" data-k="${esc(notice.kind)}">
+    <div class="wc-msn" data-wc-theme="${esc(theme)}" data-k="${esc(notice.kind)}" role="status" aria-live="polite">
       <div class="wc-msn-h">
-        <div class="wc-msn-i"><i>${noticeIcon(notice.kind)}</i></div>
+        <div class="wc-msn-i">${noticeIcon(notice.kind)}</div>
         <div class="wc-msn-tt">${esc(notice.title)}</div>
       </div>
       <div class="wc-msn-b">
@@ -124,6 +171,7 @@ function renderNoticeCard(notice, theme) {
 function renderDiceCard(r, theme) {
   const statStr = r.stat === "none" ? "Flat" : `${r.stat.toUpperCase()} ${formatMod(r.statMod)}`;
   const gearStr = r.gearBonus !== 0 ? ` ${formatMod(r.gearBonus)}` : "";
+  const skillStr = r.skillLabel ? ` + ${esc(r.skillLabel)} ${formatMod(r.skillBonus)}` : "";
   return `
     <div class="wc-mg-dice ${verdictClass(r.verdict)} ${!r.consumed ? "is-pending" : ""}" data-wc-theme="${esc(theme)}">
       <div class="wc-dice-ring">${r.total}</div>
@@ -133,9 +181,66 @@ function renderDiceCard(r, theme) {
       </div>
       <div class="wc-dice-dm">
         <em class="wc-dice-vd">${esc(r.verdict.toUpperCase())}</em>
-        <small>d20 ${r.roll} (${esc(statStr)}${esc(gearStr)}) <span class="wc-dice-dc">DC ${r.dc}</span></small>
+        <small>d20 ${r.roll}${r.mode && r.mode !== "normal" ? ` <span class="wc-dice-edge">${r.mode === "adv" ? "ADV" : "DIS"}</span>` : ""} (${esc(statStr)}${esc(gearStr)}${skillStr}) <span class="wc-dice-dc">DC ${r.dc}</span>${r.contestFoe ? ` \xB7 vs ${esc(r.contestFoe.name)} ${r.contestFoe.total}` : ""}</small>
+        ${r.lootSummary ? `<small class="wc-dice-loot">${icon("bag", 12)} ${esc(r.lootSummary)}</small>` : ""}
       </div>
     </div>
+  `;
+}
+function renderDiceCardCompact(r, theme) {
+  return `
+    <div class="wc-dice-compact ${verdictClass(r.verdict)} ${!r.consumed ? "is-pending" : ""}" data-wc-theme="${esc(theme)}" title="${esc(r.action)} \u2014 d20 ${r.roll}${r.gearBonus !== 0 ? ` ${formatMod(r.gearBonus)} gear` : ""} vs DC ${r.dc}">
+      <span class="wc-dice-compact-n">${r.total}</span>
+      <span class="wc-dice-compact-t"><b>${esc(r.who)}</b> \xB7 ${esc(r.action)}${r.mode && r.mode !== "normal" ? r.mode === "adv" ? " \xB7 ADV" : " \xB7 DIS" : ""}${!r.consumed ? " \xB7 pending" : ""}</span>
+      <em class="wc-dice-compact-v">${esc(r.verdict.toUpperCase())}</em>
+    </div>
+  `;
+}
+function formatRollForChat(r) {
+  const statStr = r.stat === "none" ? "Flat" : `${r.stat.toUpperCase()} ${formatMod(r.statMod)}`;
+  const gearStr = r.gearBonus !== 0 ? ` ${formatMod(r.gearBonus)} gear` : "";
+  const skillStr = r.skillLabel ? ` + ${r.skillLabel} ${formatMod(r.skillBonus)}` : "";
+  const edgeStr = r.mode === "adv" ? " (advantage)" : r.mode === "dis" ? " (disadvantage)" : "";
+  const keptStr = r.advRoll !== null && r.advRoll !== void 0 ? ` [kept ${r.roll}, dropped ${r.advRoll}]` : "";
+  const contestStr = r.contestFoe ? ` \u2014 defeats ${r.contestFoe.name} ${r.contestFoe.total}` : "";
+  const lootStr = r.lootSummary ? ` \u2014 ${r.lootSummary}` : "";
+  return `${r.who} \u2014 ${r.action}: d20 ${r.roll}${keptStr}${edgeStr} (${statStr}${gearStr}${skillStr}) vs DC ${r.dc} = ${r.total} \u2014 ${String(r.verdict).toUpperCase()}${contestStr}${lootStr}`;
+}
+function formatChoiceText(text) {
+  return esc(text).replace(/\*([^*\n]+)\*/g, "<em>$1</em>");
+}
+function renderChoicesCard(choices, theme, opts) {
+  const options = Array.isArray(choices?.options) ? choices.options : [];
+  if (options.length === 0) return "";
+  const claimedArr = Array.isArray(choices.claimed) ? choices.claimed : [];
+  const claimed = new Set(claimedArr.filter((n) => Number.isInteger(n)));
+  const snapKey = opts?.snapKey || "";
+  const startOpen = Boolean(opts?.open);
+  const allClaimed = claimed.size >= options.length;
+  return `
+    <details class="wc-cy" data-wc-theme="${esc(theme)}" ${startOpen ? "open" : ""}>
+      <summary class="wc-cy-h">
+        <span class="wc-cy-gem">${icon("spark", 15)}</span>
+        <span class="wc-cy-hd"><span class="wc-cy-lab">What now?</span><span class="wc-cy-sum">${allClaimed ? "Path chosen" : "Pick your next move"}</span></span>
+        ${claimed.size > 0 ? `<span class="wc-cy-count">${claimed.size}/${options.length} sent</span>` : ""}
+      </summary>
+      <div class="wc-cy-b">
+        ${options.map((o, i) => {
+    const isClaimed = claimed.has(i);
+    const kind = (o.kind || "").toLowerCase();
+    const kindAttr = kind ? ` data-k="${esc(kind)}"` : "";
+    const heat = Number(o.heat) || 0;
+    const heatAttr = heat >= 1 && heat <= 3 ? ` data-h="${heat}"` : "";
+    const heatDots = heat >= 1 && heat <= 3 ? `<i>${"\u25CF".repeat(heat)}</i>` : "";
+    return `<button type="button" class="wc-cy-opt ${isClaimed ? "is-claimed" : ""}"${kindAttr}${heatAttr} data-act="choice_pick" data-key="${esc(snapKey)}" data-idx="${i}" ${isClaimed ? "disabled" : ""} title="${isClaimed ? "Already sent" : "Send this as your next message"}">
+            <span class="wc-cy-n">${i + 1}</span>
+            <span class="wc-cy-t">${kind ? `<span class="wc-cy-k">${esc(kind)}${heatDots}</span>` : ""}<strong class="wc-cy-tx">${formatChoiceText(o.text)}</strong>${o.stakes ? `<span class="wc-cy-st">${esc(o.stakes)}</span>` : ""}${o.req ? `<span class="wc-cy-rq">${icon("lock", 10)}${esc(o.req)}</span>` : ""}</span>
+            <span class="wc-cy-go">${isClaimed ? icon("check", 16) : icon("arrow", 16)}</span>
+          </button>`;
+  }).join("")}
+        <div class="wc-cy-hint">${allClaimed ? "Choice sent \u2014 the story continues" : "Tap a path to send it"}</div>
+      </div>
+    </details>
   `;
 }
 function renderQuestEntry(q, interactive) {
@@ -148,7 +253,7 @@ function renderQuestEntry(q, interactive) {
       </div>
       ${q.objectives.length > 0 ? `<div class="wc-msq-objs">
                ${q.objectives.map(
-    (o) => interactive ? `<button type="button" class="wc-mso is-btn" data-x="${o.done ? "1" : "0"}" data-act="toggle_obj_btn" data-qid="${esc(q.id)}" data-oid="${esc(o.id)}"><span>${esc(o.text)}</span></button>` : `<div class="wc-mso" data-x="${o.done ? "1" : "0"}"><span>${esc(o.text)}</span></div>`
+    (o) => interactive ? `<button type="button" class="wc-mso is-btn" data-x="${o.done ? "1" : "0"}" data-act="toggle_obj_btn" data-qid="${esc(q.id)}" data-oid="${esc(o.id)}"><span>${esc(o.text)}</span>${o.progress ? `<em class="wc-mso-prog">${esc(o.progress)}</em>` : ""}</button>` : `<div class="wc-mso" data-x="${o.done ? "1" : "0"}"><span>${esc(o.text)}</span>${o.progress ? `<em class="wc-mso-prog">${esc(o.progress)}</em>` : ""}</div>`
   ).join("")}
              </div>` : ""}
       ${q.reward ? `<div class="wc-msq-rw">${esc(q.reward)}</div>` : ""}
@@ -173,7 +278,7 @@ function renderInventoryWindow(s, settings) {
     <div class="wc-ms is-open-panel" data-wc-theme="${esc(sysTh)}">
       <div class="wc-ms-win">
         <div class="wc-ms-hdr">
-          <div class="wc-ms-ic"><i>\u25C6</i></div>
+          <div class="wc-ms-ic">${icon("gem", 17)}</div>
           <div class="wc-ms-tt2">INVENTORY</div>
           <button class="wc-btn is-primary is-xs" data-act="add_item" style="flex:none; height:34px; padding:0 10px;">+ Item</button>
         </div>
@@ -251,7 +356,7 @@ function renderQuestWindow(s, settings) {
     <div class="wc-ms is-open-panel" data-wc-theme="${esc(sysTh)}">
       <div class="wc-ms-win">
         <div class="wc-ms-hdr">
-          <div class="wc-ms-ic"><i>\u2726</i></div>
+          <div class="wc-ms-ic">${icon("spark", 17)}</div>
           <div class="wc-ms-tt2">QUEST INFO</div>
           <button class="wc-btn is-primary is-xs" data-act="add_quest" style="flex:none; height:34px; padding:0 10px;">+ Quest</button>
         </div>
@@ -430,7 +535,7 @@ function renderSystemWindow(s, settings, opts) {
     return `
       <div class="wc-ms is-open-panel" data-wc-theme="${esc(sysTh)}">
         <div class="wc-ms-headbar">
-          <span class="wc-ms-gem">\u2694</span>
+          <span class="wc-ms-gem">${icon("crosshair", 15)}</span>
           <div class="wc-ms-hd">
             <span class="wc-ms-lab">SYSTEM \xB7 STATUS</span>
             <span class="wc-ms-sum">${esc(s.name)} \xB7 LV ${s.level} \xB7 HP ${s.hp}/${s.hpMax}</span>
@@ -444,7 +549,7 @@ function renderSystemWindow(s, settings, opts) {
   return `
     <details class="wc-ms" data-wc-theme="${esc(sysTh)}" ${opts.open ? "open" : ""}>
       <summary>
-        <span class="wc-ms-gem">\u2694</span>
+        <span class="wc-ms-gem">${icon("crosshair", 15)}</span>
         <span class="wc-ms-hd">
           <span class="wc-ms-lab">STATUS</span>
           <span class="wc-ms-sum">
@@ -459,12 +564,35 @@ function renderSystemWindow(s, settings, opts) {
     </details>
   `;
 }
+function bshStage(kind, value) {
+  const v = Number(value) || 0;
+  if (kind === "bond") {
+    if (v < 10) return "Stranger";
+    if (v < 25) return "Acquainted";
+    if (v < 45) return "Familiar";
+    if (v < 65) return "Trusted";
+    if (v < 85) return "Close";
+    return "Bonded";
+  }
+  if (kind === "spark") {
+    if (v < 10) return "None";
+    if (v < 25) return "Noticed";
+    if (v < 45) return "Interested";
+    if (v < 65) return "Attracted";
+    if (v < 85) return "Charged";
+    return "Consumed";
+  }
+  if (v < 25) return "Calm";
+  if (v < 50) return "Warm";
+  if (v < 75) return "Hot";
+  return "Past thinking";
+}
 function renderTrackerBar(kind, label, value) {
   return `
     <div class="wc-mg-bar k-${kind}">
       <b>${label}</b>
       <span class="wc-mg-track"><u style="width:${pct(value, 100)}%"></u></span>
-      <em>${value}</em>
+      <em>${value} \xB7 ${esc(bshStage(kind, value))}</em>
     </div>
   `;
 }
@@ -473,7 +601,7 @@ function renderTrackerNpcCard(n, settings, isDrawer) {
   const bars = [
     settings.trackerShowBond ? renderTrackerBar("bond", "Bond", n.bond) : "",
     settings.trackerShowSpark ? renderTrackerBar("spark", "Spark", n.spark) : "",
-    settings.trackerShowHeat ? renderTrackerBar("heat", "Heat", n.heat) : ""
+    settings.trackerShowHeat && (settings.heatDisplay !== "charged" || n.heat >= 25) ? renderTrackerBar("heat", "Heat", n.heat) : ""
   ].filter(Boolean).join("");
   return `
     <div class="wc-mg-npc">
@@ -528,6 +656,16 @@ function renderTrackerCard(w, settings, opts) {
           <div class="wc-mg-meter"><b>ARC</b><span class="wc-mg-seg">${segs(arcSegments(w.arc))}</span><em>${esc(w.arc || "Opening")}</em></div>
           <div class="wc-mg-meter"><b>PHASE</b><span class="wc-mg-seg">${segs(arcSegments(w.phase))}</span><em>${esc(w.phase || "Setup")}</em></div>
         </div>
+        ${(() => {
+    const pc = w.pc && typeof w.pc === "object" ? w.pc : {};
+    const bits = [
+      pc.outfit && `Wearing: <b>${esc(pc.outfit)}</b>`,
+      pc.pos && `Position: <b>${esc(pc.pos)}</b>`,
+      pc.cond && `Condition: <b>${esc(pc.cond)}</b>`,
+      pc.carry && `Carrying: <b>${esc(pc.carry)}</b>`
+    ].filter(Boolean);
+    return bits.length > 0 ? `<div class="wc-pc-strip" title="What a camera would see">${bits.map((x) => `<span>${x}</span>`).join("<i>\xB7</i>")}</div>` : "";
+  })()}
         ${w.notes ? `<div class="wc-mg-note">${esc(w.notes)}</div>` : ""}
       </div>
 
@@ -564,10 +702,13 @@ function renderTrackerCard(w, settings, opts) {
         ${openThreads.length + seeds.length + (isDrawer ? resolvedThreads.length : 0) > 0 ? `<div class="wc-mg-tlist">
                  ${[...openThreads, ...seeds, ...isDrawer ? resolvedThreads : []].map((t) => {
     const cls = t.status === "resolved" ? "is-good" : t.status === "seed" ? "is-warn" : "";
+    const isTimer = t.kind === "timer" && t.status !== "resolved" && Number.isFinite(t.turnsLeft);
+    const urgent = isTimer && t.turnsLeft <= 2;
     return `
                        <div class="wc-mg-trow">
                          <div class="wc-mg-tmain">
                            <button class="wc-pill ${cls}" ${isDrawer ? `data-act="cycle_thread" data-id="${esc(t.id)}" style="cursor:pointer"` : ""}>${esc(t.status)}</button>
+                           ${isTimer ? `<span class="wc-timer-chip${urgent ? " is-urgent" : ""}" title="Turns until the consequence lands">\u23F1 ${t.turnsLeft}t</span>` : ""}
                            <span><strong>${esc(t.title)}</strong>${t.detail ? ` \u2014 ${esc(t.detail)}` : ""}</span>
                          </div>
                          ${isDrawer ? `<button class="wc-btn is-xs" data-act="rm_thread" data-id="${esc(t.id)}">\xD7</button>` : ""}
@@ -582,7 +723,7 @@ function renderTrackerCard(w, settings, opts) {
     return `
       <div class="wc-mg is-open-panel" data-wc-theme="${esc(settings.theme)}">
         <div class="wc-mg-headbar">
-          <span class="wc-mg-gem">\u2726</span>
+          <span class="wc-mg-gem">${icon("spark", 14)}</span>
           <div class="wc-mg-hd">
             <span class="wc-mg-lab">STORY TRACKER</span>
             <span class="wc-mg-sum">${esc(w.location || "Scene")} \xB7 ${presentNpcs.length} here${openThreads.length ? ` \xB7 ${openThreads.length} thread${openThreads.length === 1 ? "" : "s"}` : ""}</span>
@@ -595,7 +736,7 @@ function renderTrackerCard(w, settings, opts) {
   return `
     <details class="wc-mg" data-wc-theme="${esc(settings.theme)}" ${opts.open ? "open" : ""}>
       <summary>
-        <span class="wc-mg-gem">\u2726</span>
+        <span class="wc-mg-gem">${icon("spark", 14)}</span>
         <span class="wc-mg-hd">
           <span class="wc-mg-lab">TRACKER</span>
           <span class="wc-mg-sum">${esc(w.location || "Scene")} \xB7 ${esc(w.time || `Day ${w.dayCount}`)} \xB7 ${presentNpcs.length} in scene</span>
@@ -606,7 +747,8 @@ function renderTrackerCard(w, settings, opts) {
   `;
 }
 
-// src/styles.ts
+// src/frontend/styles.ts
+/*! src/frontend/styles.ts */
 var WEFT_CHRONICLE_CSS = `
 /* ---- Shared Theme RGB Tokens (matches Weft_v4_4 card_theme + Lumiverse Native) ---- */
 .wc-root, .wc-inline-wrap, .wc-ms, .wc-msn, .wc-mg, .wc-mg-dice {
@@ -648,6 +790,21 @@ var WEFT_CHRONICLE_CSS = `
 [data-wc-theme="crimson"]   { --pr: 244, 63, 94;   --vr: 159, 18, 57;   }
 [data-wc-theme="mono"]      { --pr: 161, 161, 170; --vr: 113, 113, 122; }
 [data-wc-theme="lumiverse"] { --pr: 155, 140, 245; --vr: 129, 113, 229; }
+[data-wc-theme="contrast"]  { --pr: 255, 214, 0;   --vr: 255, 176, 0;    }
+/* High-contrast: pure black cards, #FFF text, hard borders, yellow accents */
+.wc-root[data-wc-theme="contrast"], .wc-inline-wrap[data-wc-theme="contrast"], [data-wc-theme="contrast"] .wc-cy {
+  --wc-card: #000000;
+  --wc-card-hover: #111111;
+  --wc-border: rgba(255, 255, 255, 0.9);
+  --wc-text: #ffffff;
+  --wc-muted: #f0f0f0;
+  --wc-dim: #c9c9c9;
+  --wc-good: #4ade80;
+  --wc-warn: #ffd600;
+  --wc-bad: #ff6b6b;
+  --wc-accent-ink: #ffd600;
+  --wc-accent-border: rgba(255, 214, 0, 0.75);
+}
 
 /* ---- Light Mode Adaptations ---- */
 [data-theme-mode="light"] .wc-root,
@@ -694,33 +851,42 @@ var WEFT_CHRONICLE_CSS = `
 }
 .wc-brand-title { font-weight: 700; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .wc-brand-sub { font-size: 11px; color: var(--wc-muted); }
+.wc-brand-sub.is-bad { color: var(--wc-bad); font-weight: 700; }
 .wc-actions-row { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 
 .wc-tabs {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr 38px;
-  gap: 4px;
+  display: flex;
+  align-items: stretch;
+  gap: 3px;
   padding: 4px;
   border-radius: var(--wc-radius);
   background: var(--wc-card);
   border: 1px solid var(--wc-border);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
+.wc-tabs::-webkit-scrollbar { display: none; }
+.wc-tab-icon { flex: 0 0 auto; width: 34px; padding-left: 0; padding-right: 0; }
 .wc-tab {
   appearance: none;
   border: 1px solid transparent;
   background: transparent;
   color: var(--wc-muted);
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 700;
-  padding: 6px 3px;
+  padding: 6px 7px;
   border-radius: calc(var(--wc-radius) - 3px);
   cursor: pointer;
-  display: flex;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 4px;
+  flex: 1 0 max-content;
+  white-space: nowrap;
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
+.wc-tab .wc-ic { flex: none; }
 .wc-tab:hover { color: var(--wc-text); background: var(--wc-card-hover); }
 .wc-tab.is-active {
   background: var(--wc-accent-soft);
@@ -795,6 +961,10 @@ var WEFT_CHRONICLE_CSS = `
 .wc-field label { font-size: 11px; font-weight: 600; color: var(--wc-muted); }
 .wc-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .wc-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+@media (max-width: 480px) {
+  .wc-row-2, .wc-row-3 { grid-template-columns: 1fr; }
+  .wc-modal-foot { flex-wrap: wrap; }
+}
 .wc-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 4px 0; cursor: pointer; }
 .wc-toggle-row span { font-size: 12.5px; }
 .wc-toggle-row small { display: block; font-size: 11px; color: var(--wc-dim); }
@@ -890,8 +1060,6 @@ var WEFT_CHRONICLE_CSS = `
   border: 1px solid rgba(var(--pr), 0.58);
   background: linear-gradient(155deg, rgba(var(--pr), 0.24), rgba(var(--vr), 0.1));
   color: var(--tx);
-  font-size: 14px;
-  text-shadow: 0 0 8px var(--a);
   box-shadow: 0 0 12px -3px rgba(var(--pr), 0.72);
 }
 .wc-ms-hd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -1000,22 +1168,12 @@ var WEFT_CHRONICLE_CSS = `
   flex: none;
   width: 34px;
   height: 34px;
-  border-radius: 5px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(var(--pr), 0.48);
-  background: rgba(var(--pr), 0.09);
-}
-.wc-ms-ic i {
-  width: 21px;
-  height: 21px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
   border: 1.5px solid var(--tx);
-  border-radius: 50%;
-  font: 700 12px/1 system-ui;
-  font-style: normal;
-  text-shadow: 0 0 8px var(--a);
+  background: rgba(var(--pr), 0.09);
+  color: var(--tx);
 }
 .wc-ms-tt2 {
   flex: 1;
@@ -1334,6 +1492,7 @@ var WEFT_CHRONICLE_CSS = `
 }
 .wc-msn[data-k="levelup"] { --pr: 250, 204, 21; --vr: 217, 119, 6; }
 .wc-msn[data-k="warn"]    { --pr: 251, 113, 133; --vr: 159, 18, 57; }
+.wc-msn[data-k="item"]    { --pr: 94, 200, 242; --vr: 13, 116, 144; }
 [data-theme-mode="light"] .wc-msn {
   --tx: color-mix(in srgb, rgb(var(--vr)) 45%, #18141c);
   background:
@@ -1343,13 +1502,9 @@ var WEFT_CHRONICLE_CSS = `
 .wc-msn-h { display: flex; gap: 6px; margin-bottom: 8px; }
 .wc-msn-i {
   flex: none; width: 34px; height: 34px; display: grid; place-items: center;
-  border: 1px solid var(--ln); background: rgba(var(--pr), 0.1);
-}
-.wc-msn-i i {
-  width: 22px; height: 22px; display: grid; place-items: center;
-  border: 1.8px solid var(--tx); border-radius: 50%;
-  font: 700 12px/1 system-ui; font-style: normal;
-  text-shadow: 0 0 8px var(--a); box-shadow: 0 0 8px rgba(var(--pr), 0.55);
+  border: 1.6px solid var(--tx); border-radius: 50%;
+  background: rgba(var(--pr), 0.12); color: var(--tx);
+  box-shadow: 0 0 8px rgba(var(--pr), 0.55);
 }
 .wc-msn-tt {
   flex: 1; display: grid; place-items: center;
@@ -1394,7 +1549,7 @@ var WEFT_CHRONICLE_CSS = `
 .wc-mg-gem {
   flex: none; display: grid; place-items: center;
   width: 32px; height: 32px; border-radius: 11px;
-  background: var(--grad); color: #fff; font-size: 15px;
+  background: var(--grad); color: #fff;
   box-shadow: 0 5px 16px -3px rgba(var(--pr), 0.55), inset 0 1px 0 rgba(255,255,255,0.35);
 }
 .wc-mg-hd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
@@ -1514,6 +1669,7 @@ var WEFT_CHRONICLE_CSS = `
   color: var(--c); white-space: nowrap;
 }
 .wc-dice-dm small { font-size: 11px; opacity: 0.76; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.wc-dice-edge { font-style: normal; font-size: 9px; font-weight: 800; color: var(--wc-accent); border: 1px solid var(--wc-accent-border); border-radius: 4px; padding: 0 4px; letter-spacing: 0.08em; vertical-align: 1px; }
 .wc-dice-dc { padding-left: 6px; margin-left: 4px; border-left: 1px solid rgba(127,127,127,0.35); }
 
 /* ---- Inline Chat Bubble Container ---- */
@@ -1559,11 +1715,142 @@ var WEFT_CHRONICLE_CSS = `
 .wc-rarity-legendary { color: #fbbf24; }
 .wc-rarity-mythic    { color: #fb7185; }
 
+/* ---- CYOA Choices ("What now?") ---- */
+.wc-cy {
+  margin: 6px auto;
+  max-width: 520px;
+  border: 1px solid var(--wc-accent-border);
+  border-radius: var(--wc-radius, 12px);
+  background:
+    radial-gradient(120% 160% at 0% 0%, rgba(var(--pr), 0.14), transparent 58%),
+    radial-gradient(90% 140% at 100% 0%, rgba(var(--vr), 0.12), transparent 62%),
+    var(--wc-bg);
+  box-shadow: 0 12px 32px -16px rgba(var(--pr), 0.35);
+  overflow: hidden;
+  font-size: 12.5px;
+  color: var(--wc-text);
+}
+.wc-cy-h {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; cursor: pointer; list-style: none; user-select: none;
+}
+.wc-cy-h::-webkit-details-marker { display: none; }
+.wc-cy-h::after { content: ""; flex: none; width: 7px; height: 7px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; opacity: 0.5; margin-left: auto; transform: rotate(45deg); transition: transform 0.2s; }
+.wc-cy[open] .wc-cy-h::after { transform: rotate(225deg); }
+.wc-cy-gem {
+  flex: none; display: grid; place-items: center; width: 30px; height: 30px;
+  border-radius: 10px; background: linear-gradient(135deg, rgb(var(--pr)), rgb(var(--vr)));
+  color: #fff;
+  box-shadow: 0 5px 16px -3px rgba(var(--pr), 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+.wc-cy-hd { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.wc-cy-lab { font-size: 10px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase; background: linear-gradient(135deg, rgb(var(--pr)), rgb(var(--vr))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.wc-cy-sum { font-size: 11px; color: var(--wc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-cy-count { flex: none; font-size: 10px; font-weight: 800; letter-spacing: 0.08em; color: var(--wc-accent); border: 1px solid var(--wc-accent-border); background: var(--wc-accent-soft); border-radius: 999px; padding: 2px 8px; }
+.wc-cy-b { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px 12px; border-top: 1px solid var(--wc-border); }
+.wc-cy-opt {
+  --ka: var(--pr);
+  position: relative; display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 8px 12px 8px 9px; border-radius: 10px; text-align: left; cursor: pointer;
+  border: 1px solid rgba(var(--ka), 0.32);
+  background: linear-gradient(100deg, rgba(var(--ka), 0.16), rgba(var(--ka), 0.05) 60%, rgba(127, 127, 127, 0.04));
+  color: inherit; font: inherit; overflow: hidden;
+  transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s, background 0.18s;
+}
+.wc-cy-opt::before { content: ""; position: absolute; left: 0; top: 14%; bottom: 14%; width: 3px; border-radius: 0 3px 3px 0; background: rgb(var(--ka)); }
+.wc-cy-opt[data-k="direct"]     { --ka: 251, 113, 133; }
+.wc-cy-opt[data-k="social"]     { --ka: 94, 200, 242; }
+.wc-cy-opt[data-k="careful"]    { --ka: 52, 211, 153; }
+.wc-cy-opt[data-k="investigate"]{ --ka: 250, 204, 21; }
+.wc-cy-opt[data-k="action"]     { --ka: 251, 146, 60; }
+.wc-cy-opt[data-k="intimate"]   { --ka: 244, 114, 182; }
+.wc-cy-opt[data-k="wild"]       { --ka: 167, 139, 250; }
+.wc-cy-opt:hover:not(:disabled) { border-color: rgba(var(--ka), 0.75); background: linear-gradient(100deg, rgba(var(--ka), 0.28), rgba(var(--ka), 0.08) 65%, rgba(127, 127, 127, 0.05)); box-shadow: 0 10px 26px -14px rgb(var(--ka)); transform: translateY(-1px); }
+.wc-cy-opt:focus-visible { outline: 2px solid rgb(var(--ka)); outline-offset: 2px; }
+.wc-cy-opt:disabled { opacity: 0.55; cursor: default; }
+.wc-cy-opt.is-busy { opacity: 0.7; }
+.wc-cy-opt.is-claimed { border-color: var(--wc-border); background: var(--wc-bg); }
+.wc-cy-n {
+  flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 8px;
+  background: linear-gradient(135deg, rgb(var(--ka)), rgba(var(--ka), 0.62));
+  color: #fff; font-size: 12px; font-weight: 800;
+  box-shadow: 0 4px 12px -3px rgba(var(--ka), 0.7), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.wc-cy-t { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; line-height: 1.42; }
+.wc-cy-k { display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 800; letter-spacing: 0.13em; text-transform: uppercase; color: rgb(var(--ka)); }
+.wc-cy-k i { font-style: normal; letter-spacing: 2px; font-size: 8px; }
+.wc-cy-tx { font-weight: 600; }
+.wc-cy-tx em { font-style: italic; }
+.wc-cy-st { font-size: 11px; color: var(--wc-muted); }
+.wc-cy-rq { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-weight: 700; color: var(--wc-warn); }
+.wc-cy-rq .wc-ic { opacity: 0.9; }
+.wc-cy-go { flex: none; display: grid; place-items: center; color: rgb(var(--ka)); opacity: 0.6; padding-left: 6px; transition: transform 0.18s, opacity 0.18s; }
+.wc-cy-opt:hover:not(:disabled) .wc-cy-go { opacity: 1; transform: translateX(3px); }
+.wc-cy-opt.is-claimed .wc-cy-go { color: var(--wc-good); opacity: 1; }
+.wc-cy-hint { text-align: center; font-size: 9.5px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: var(--wc-dim); margin-top: 1px; }
+@media (prefers-reduced-motion: reduce) {
+  .wc-cy *, .wc-cy *::before, .wc-cy *::after { transition: none !important; }
+  .wc-root *, .wc-root *::before, .wc-root *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}
+
+.wc-dice-compact { display: flex; align-items: center; gap: 9px; margin: 4px auto; max-width: 520px; padding: 5px 10px; border-radius: 9px; border: 1px solid var(--wc-accent-border); background: var(--wc-bg); font-size: 11px; color: var(--wc-text); }
+.wc-dice-compact-n { flex: none; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; font-weight: 800; background: linear-gradient(135deg, rgb(var(--pr)), rgb(var(--vr))); color: #fff; font-size: 12px; }
+.wc-dice-compact-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--wc-muted); }
+.wc-dice-compact-t b { color: var(--wc-text); }
+.wc-dice-compact-v { flex: none; font-style: normal; font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; }
+.wc-dice-compact.is-good .wc-dice-compact-v { color: var(--wc-good); }
+.wc-dice-compact.is-warn .wc-dice-compact-v { color: var(--wc-warn); }
+.wc-dice-compact.is-bad .wc-dice-compact-v { color: var(--wc-bad); }
+.wc-dice-compact.is-crit .wc-dice-compact-v { color: var(--wc-accent); }
+.wc-dice-compact.is-pending { border-style: dashed; }
+.wc-chip-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 8px; }
+.wc-chip { border: 1px solid var(--wc-border); background: transparent; color: var(--wc-muted); font-family: inherit; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; border-radius: 999px; padding: 3px 10px; cursor: pointer; transition: all 0.15s; }
+.wc-chip:hover { color: var(--wc-text); border-color: var(--wc-accent-border); }
+.wc-chip.is-active { color: #fff; border-color: transparent; background: linear-gradient(135deg, rgb(var(--pr)), rgb(var(--vr))); }
+.wc-chip:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
+.wc-mso-prog { flex: none; margin-left: auto; font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: 0.06em; color: var(--wc-accent); border: 1px solid var(--wc-accent-border); background: var(--wc-accent-soft); border-radius: 6px; padding: 1px 6px; }
+.wc-notif-list { display: flex; flex-direction: column; gap: 5px; max-height: 280px; overflow-y: auto; }
+.wc-notif-row { display: flex; align-items: center; gap: 8px; padding: 6px 9px; border-radius: 8px; background: rgba(var(--pr), 0.05); border-left: 2px solid var(--wc-accent-border); }
+.wc-notif-row[data-k="levelup"] { border-left-color: #fbbf24; }
+.wc-notif-row[data-k="quest"] { border-left-color: #34d399; }
+.wc-notif-row[data-k="item"] { border-left-color: #5ec8f2; }
+.wc-notif-row[data-k="skill"] { border-left-color: #1677a0; }
+.wc-notif-row[data-k="warn"] { border-left-color: var(--wc-bad); }
+.wc-notif-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.wc-notif-main b { font-size: 11px; }
+.wc-notif-main span { font-size: 10.5px; color: var(--wc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-ic { flex: none; }
+.wc-root ::selection, .wc-inline-wrap ::selection { background: rgba(var(--pr, 244, 63, 94), 0.32); }
+.wc-root ::-webkit-scrollbar, .wc-inline-wrap ::-webkit-scrollbar { width: 8px; height: 8px; }
+.wc-root ::-webkit-scrollbar-thumb, .wc-inline-wrap ::-webkit-scrollbar-thumb { background: rgba(var(--pr, 244, 63, 94), 0.35); border-radius: 99px; }
+.wc-root ::-webkit-scrollbar-track, .wc-inline-wrap ::-webkit-scrollbar-track { background: transparent; }
+.wc-btn:focus-visible, .wc-tab:focus-visible, .wc-toggle-row input:focus-visible, .wc-input:focus-visible, .wc-select:focus-visible, .wc-textarea:focus-visible, .wc-mso.is-btn:focus-visible, .wc-pill:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
+.wc-synclog { display: flex; flex-direction: column; gap: 4px; }
+.wc-synclog-row { display: flex; align-items: baseline; gap: 10px; font-size: 11px; padding: 3px 8px; border-radius: 6px; background: rgba(var(--pr), 0.05); border-left: 2px solid transparent; }
+.wc-synclog-row span { flex: none; color: var(--wc-dim); font-variant-numeric: tabular-nums; }
+.wc-synclog-row em { font-style: normal; color: var(--wc-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wc-synclog-row.is-ok { border-left-color: var(--wc-good); }
+.wc-synclog-row.is-fail { border-left-color: var(--wc-bad); }
+.wc-synclog-row.is-fail em { color: var(--wc-bad); }
+.wc-seg { display: flex; gap: 4px; }
+.wc-seg-btn { flex: 1; border: 1px solid var(--wc-border); background: transparent; color: var(--wc-muted); border-radius: 8px; padding: 5px 8px; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+.wc-seg-btn:hover { color: var(--wc-text); border-color: var(--wc-accent-border); }
+.wc-seg-btn.is-active { color: #fff; border-color: transparent; background: linear-gradient(135deg, rgb(var(--pr)), rgb(var(--vr))); box-shadow: 0 6px 16px -6px rgba(var(--pr), 0.6); }
+.wc-seg-btn:focus-visible { outline: 2px solid var(--wc-accent); outline-offset: 2px; }
+.wc-pc-strip { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin: 6px 0 0; padding: 5px 9px; border: 1px dashed var(--wc-accent-border); border-radius: 8px; font-size: 11px; color: var(--wc-muted); background: rgba(var(--pr), 0.05); }
+.wc-pc-strip b { color: var(--wc-text); font-weight: 700; }
+.wc-pc-strip i { opacity: 0.5; font-style: normal; }
+.wc-timer-chip { flex: none; display: inline-flex; align-items: center; gap: 4px; border: 1px solid var(--wc-warn); color: var(--wc-warn); background: rgba(251, 191, 36, 0.1); font-size: 10px; font-weight: 800; letter-spacing: 0.06em; border-radius: 999px; padding: 1px 8px; }
+.wc-timer-chip.is-urgent { border-color: var(--wc-bad); color: var(--wc-bad); background: rgba(251, 113, 133, 0.12); animation: wc-timer-pulse 1.2s ease-in-out infinite; }
+@keyframes wc-timer-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+@media (prefers-reduced-motion: reduce) { .wc-timer-chip.is-urgent { animation: none; } }
 .wc-modal { padding: 12px; display: flex; flex-direction: column; gap: 10px; font-size: 13px; color: var(--lumiverse-text, inherit); }
 .wc-modal-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.wc-dice-loot { display: inline-flex; align-items: center; gap: 5px; font-size: 10px; color: var(--wc-accent); margin-top: 2px; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 `;
 
-// src/frontend.ts
+// src/frontend/frontend.ts
+/*! src/frontend/frontend.ts */
 var WEFT_THEMES = [
   { id: "sakura", label: "Sakura (pink)" },
   { id: "ocean", label: "Ocean (blue)" },
@@ -1574,7 +1861,8 @@ var WEFT_THEMES = [
   { id: "teal", label: "Teal (cyan)" },
   { id: "crimson", label: "Crimson (red)" },
   { id: "mono", label: "Mono (gray)" },
-  { id: "lumiverse", label: "Lumiverse Native" }
+  { id: "lumiverse", label: "Lumiverse Native" },
+  { id: "contrast", label: "High Contrast (black / #FFF)" }
 ];
 var CREST_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 21 7 21 17 12 22 3 17 3 7 12 2"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg>`;
 var DICE_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 3 7v10l9 5 9-5V7l-9-5Z"/><path d="M12 22V12"/><path d="M12 12 3 7"/><path d="M12 12l9-5"/><circle cx="12" cy="7.5" r="0.8" fill="currentColor"/></svg>`;
@@ -1582,6 +1870,38 @@ function setup(ctx) {
   const cleanups = [];
   ctx.dom.addStyle(WEFT_CHRONICLE_CSS);
   cleanups.push(() => ctx.dom.cleanup());
+  let openModalCount = 0;
+  const rawShowModal = ctx.ui.showModal ? ctx.ui.showModal.bind(ctx.ui) : null;
+  if (rawShowModal) {
+    ctx.ui.showModal = (...args) => {
+      openModalCount += 1;
+      try {
+        send("set_editing", { editing: true, until: Date.now() + 9e4 });
+      } catch {
+      }
+      const modal = rawShowModal(...args);
+      const rawDismiss = modal && typeof modal.dismiss === "function" ? modal.dismiss.bind(modal) : null;
+      if (rawDismiss) {
+        modal.dismiss = () => {
+          openModalCount = Math.max(0, openModalCount - 1);
+          try {
+            if (openModalCount === 0) send("set_editing", { editing: false });
+            else send("set_editing", { editing: true, until: Date.now() + 9e4 });
+          } catch {
+          }
+          return rawDismiss();
+        };
+      }
+      return modal;
+    };
+    cleanups.push(() => {
+      ctx.ui.showModal = rawShowModal;
+      try {
+        send("set_editing", { editing: false });
+      } catch {
+      }
+    });
+  }
   let activeSubTab = "system";
   let chatId = ctx.getActiveChat().chatId;
   let data = null;
@@ -1597,12 +1917,14 @@ function setup(ctx) {
   };
   let syncing = false;
   let statusNote = "";
+  let promptEstimate = null;
   const injectedWrappers = /* @__PURE__ */ new Map();
   const rollDraft = {
     action: "",
     stat: "dex",
     dc: 15,
-    gearBonus: 0
+    gearBonus: 0,
+    mode: "normal"
   };
   function getActiveConnectionId() {
     try {
@@ -1619,7 +1941,7 @@ function setup(ctx) {
     shortName: "Weft",
     headerTitle: "Weft Chronicle",
     description: "Authentic Weft System Window, Story Tracker, Inventory, Quests & Fair d20 Dice.",
-    keywords: ["weft", "rpg", "status", "system", "tracker", "dice", "d20", "npc", "quests", "settings"],
+    keywords: ["weft", "rpg", "status", "system", "tracker", "dice", "d20", "npc", "quests", "settings", "cyoa", "choices"],
     iconSvg: CREST_SVG
   });
   cleanups.push(() => drawerTab.destroy());
@@ -1632,7 +1954,7 @@ function setup(ctx) {
         shortName: "Weft",
         iconSvg: CREST_SVG,
         description: "Configure Weft Chronicle modules, themes, inline chat cards, and sidecar AI.",
-        keywords: ["weft", "system", "tracker", "dice", "rpg", "sidecar", "theme"]
+        keywords: ["weft", "system", "tracker", "dice", "rpg", "sidecar", "theme", "cyoa", "choices"]
       });
       cleanups.push(() => settingsTabHandle?.destroy());
     } catch {
@@ -1651,6 +1973,67 @@ function setup(ctx) {
     const activeConnectionId = getActiveConnectionId();
     ctx.sendToBackend({ type, chatId, activeConnectionId, ...extra });
   }
+  async function pickChoice(key, index, sourceBtn) {
+    if (!key || !Number.isFinite(index)) return;
+    const snap = data?.snapshots?.[key];
+    const opt = snap?.choices?.options?.[index];
+    if (!opt) return;
+    if (Array.isArray(snap.choices.claimed) && snap.choices.claimed.includes(index)) return;
+    const text = String(opt.text || "").trim().slice(0, 600);
+    if (!text) return;
+    const restoreBtn = () => {
+      if (sourceBtn) {
+        sourceBtn.disabled = false;
+        sourceBtn.classList.remove("is-busy");
+      }
+    };
+    if (sourceBtn) {
+      sourceBtn.disabled = true;
+      sourceBtn.classList.add("is-busy");
+    }
+    let outcome = "error";
+    try {
+      const composer = ctx.composer;
+      if (composer && typeof composer.setText === "function" && typeof composer.send === "function") {
+        let mounted = true;
+        try {
+          const state = typeof composer.getState === "function" ? composer.getState() : null;
+          if (state && state.mounted === false) mounted = false;
+        } catch {
+          mounted = true;
+        }
+        if (mounted) {
+          composer.setText(text);
+          await composer.send();
+          outcome = "sent";
+        }
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err || "");
+      outcome = /busy/i.test(msg) ? "busy" : "error";
+    }
+    if (outcome === "sent") {
+      send("choice_claim", { key, index });
+      return;
+    }
+    if (outcome === "busy") {
+      restoreBtn();
+      send("choice_feedback", { kind: "busy" });
+      return;
+    }
+    try {
+      if (typeof navigator !== "undefined" && navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        send("choice_claim", { key, index });
+        send("choice_feedback", { kind: "copied" });
+        restoreBtn();
+        return;
+      }
+    } catch {
+    }
+    restoreBtn();
+    send("choice_feedback", { kind: "error" });
+  }
   function updateChromeState() {
     const diceOn = Boolean(data?.enabled && data?.modules?.dice);
     rollAction.setEnabled(diceOn);
@@ -1660,7 +2043,7 @@ function setup(ctx) {
     }
     const pendingRolls = data.modules.dice ? data.rolls.filter((r) => !r.consumed).length : 0;
     if (pendingRolls > 0) {
-      drawerTab.setBadge(`\u{1F3B2}${pendingRolls}`);
+      drawerTab.setBadge(String(pendingRolls));
     } else if (data.modules.system && data.sheet.pts > 0) {
       drawerTab.setBadge(`+${data.sheet.pts}`);
     } else {
@@ -1696,11 +2079,20 @@ function setup(ctx) {
   function findSnapshotForMessage(d, messageId) {
     if (d.lastSyncedKey && d.lastSyncedKey.startsWith(`${messageId}:`)) {
       const activeSnap = d.snapshots[d.lastSyncedKey];
-      if (activeSnap) return activeSnap;
+      if (activeSnap) return { snap: activeSnap, key: d.lastSyncedKey };
     }
-    const matching = Object.values(d.snapshots || {}).filter((s) => s.messageId === messageId).sort((a, b) => b.timestamp - a.timestamp);
-    if (matching.length > 0) return matching[0];
+    const matching = Object.entries(d.snapshots || {}).filter(([, s]) => s && s.messageId === messageId).sort((a, b) => (b[1]?.timestamp || 0) - (a[1]?.timestamp || 0));
+    if (matching.length > 0) {
+      return { snap: matching[0][1], key: matching[0][0] };
+    }
     return null;
+  }
+  function findLatestChoices(d) {
+    if (!d) return null;
+    const entries = Object.entries(d.snapshots || {}).filter(([, s]) => s && s.choices && Array.isArray(s.choices.options) && s.choices.options.length > 0);
+    if (entries.length === 0) return null;
+    entries.sort((a, b) => (b[1]?.timestamp || 0) - (a[1]?.timestamp || 0));
+    return { snap: entries[0][1], key: entries[0][0] };
   }
   function isInsideOurInjection(el) {
     return Boolean(el.closest(".wc-inline-wrap"));
@@ -1812,24 +2204,27 @@ function setup(ctx) {
     }
     return { target: bubbleEl, position: "beforeend", padX: null, afterIsland: false };
   }
-  function buildInlineHtml(d, cfg, snap, padX, afterIsland) {
+  function buildInlineHtml(d, cfg, snap, padX, afterIsland, snapKey) {
     const parts = [];
     const sysTh = resolveSystemTheme(cfg);
-    if (d.modules.dice && cfg.showInlineDice && Array.isArray(snap.rolls) && snap.rolls.length > 0) {
+    if (d.initialized && d.modules.dice && cfg.showInlineDice && Array.isArray(snap.rolls) && snap.rolls.length > 0) {
       for (const r of snap.rolls) {
-        parts.push(renderDiceCard(r, cfg.theme));
+        parts.push(cfg.inlineDiceCompact ? renderDiceCardCompact(r, cfg.theme) : renderDiceCard(r, cfg.theme));
       }
     }
-    if (d.modules.system && cfg.showInlineNotices && Array.isArray(snap.notices) && snap.notices.length > 0) {
+    if (d.initialized && d.modules.system && cfg.showInlineNotices && Array.isArray(snap.notices) && snap.notices.length > 0) {
       for (const n of snap.notices) {
         parts.push(renderNoticeCard(n, sysTh));
       }
     }
-    if (d.modules.system && cfg.showInlineSystem) {
+    if (d.initialized && d.modules.system && cfg.showInlineSystem) {
       parts.push(renderSystemWindow(snap.sheet, cfg, { mode: "inline", open: cfg.inlineStartsOpen }));
     }
-    if (d.modules.tracker && cfg.showInlineTracker) {
+    if (d.initialized && d.modules.tracker && cfg.showInlineTracker) {
       parts.push(renderTrackerCard(snap.world, cfg, { mode: "inline", open: cfg.inlineStartsOpen }));
+    }
+    if (d.modules.choices && cfg.showInlineChoices && snap.choices && Array.isArray(snap.choices.options) && snap.choices.options.length > 0) {
+      parts.push(renderChoicesCard(snap.choices, cfg.theme, { open: cfg.inlineStartsOpen, snapKey }));
     }
     if (parts.length === 0) return "";
     const extraCls = [
@@ -1840,18 +2235,19 @@ function setup(ctx) {
     return `<div class="wc-inline-wrap${extraCls ? " " + extraCls : ""}" data-wc-theme="${esc(cfg.theme)}"${padStyle}>${parts.join("")}</div>`;
   }
   function syncInlineChatCards() {
-    if (!data || !settings || !data.enabled || !data.initialized) {
+    const choicesReady = Boolean(
+      data && settings && data.enabled && data.modules && data.modules.choices && settings.showInlineChoices && Object.values(data.snapshots || {}).some((s) => s && s.choices && Array.isArray(s.choices.options) && s.choices.options.length > 0)
+    );
+    if (!data || !settings || !data.enabled || !data.initialized && !choicesReady) {
       clearAllInlineCards();
       return;
     }
-    const wantAny = data.modules.system && (settings.showInlineSystem || settings.showInlineNotices) || data.modules.tracker && settings.showInlineTracker || data.modules.dice && settings.showInlineDice;
+    const wantAny = data.modules.system && (settings.showInlineSystem || settings.showInlineNotices) || data.modules.tracker && settings.showInlineTracker || data.modules.dice && settings.showInlineDice || data.modules.choices && settings.showInlineChoices;
     if (!wantAny) {
       clearAllInlineCards();
       return;
     }
     const activeIds = /* @__PURE__ */ new Set();
-    const latestSnapKey = data.lastSyncedKey;
-    const latestSnap = latestSnapKey ? data.snapshots[latestSnapKey] : null;
     const placement = settings.inlinePlacement === "below" || settings.inlinePlacement === "footer" ? settings.inlinePlacement : "inside";
     let mounted = [];
     try {
@@ -1860,11 +2256,14 @@ function setup(ctx) {
       mounted = [];
     }
     for (const item of mounted) {
-      const snap = findSnapshotForMessage(data, item.messageId);
-      if (!snap) continue;
-      const effectiveSnap = latestSnap && snap.messageId === latestSnap.messageId ? { ...snap, sheet: data.sheet, world: data.world } : snap;
+      const found = findSnapshotForMessage(data, item.messageId);
+      if (!found) continue;
+      const snap = found.snap;
+      const snapKey = found.key;
+      const effectiveSnap = snap;
       const resolved = resolveInlineTarget(item.element, placement);
-      const html = buildInlineHtml(data, settings, effectiveSnap, resolved.padX, resolved.afterIsland);
+      const inlineCfg = data.themeOverride ? { ...settings, theme: data.themeOverride } : settings;
+      const html = buildInlineHtml(data, inlineCfg, effectiveSnap, resolved.padX, resolved.afterIsland, snapKey);
       if (!html) continue;
       activeIds.add(item.messageId);
       const existing = injectedWrappers.get(item.messageId);
@@ -1894,6 +2293,8 @@ function setup(ctx) {
               send("allocate_stat", { stat: btn.dataset.stat, amount: 1 });
             } else if (btn.dataset.act === "auto_alloc") {
               send("auto_allocate");
+            } else if (btn.dataset.act === "choice_pick") {
+              void pickChoice(btn.dataset.key, Number(btn.dataset.idx), btn);
             }
           });
           injectedWrappers.set(item.messageId, {
@@ -1934,6 +2335,22 @@ function setup(ctx) {
     if (inlineSettleTimer) clearTimeout(inlineSettleTimer);
     clearAllInlineCards();
   });
+  function edgeSegHtml(idPrefix, mode) {
+    const attr = (m) => `data-edge="${m}"`;
+    const cls = (m) => `wc-seg-btn${mode === m ? " is-active" : ""}`;
+    if (idPrefix === "wc-m-edge") {
+      return `<div class="wc-seg" id="${idPrefix}">
+        <button type="button" class="${cls("normal")}" ${attr("normal")}>Normal</button>
+        <button type="button" class="${cls("adv")}" ${attr("adv")}>Advantage</button>
+        <button type="button" class="${cls("dis")}" ${attr("dis")}>Disadvantage</button>
+      </div>`;
+    }
+    return `<div class="wc-seg" id="${idPrefix}">
+      <button type="button" class="${cls("normal")}" data-act="edge" data-mode="normal">Normal</button>
+      <button type="button" class="${cls("adv")}" data-act="edge" data-mode="adv">Advantage</button>
+      <button type="button" class="${cls("dis")}" data-act="edge" data-mode="dis">Disadvantage</button>
+    </div>`;
+  }
   function openQuickRollModal() {
     if (!chatId) return;
     const sheet = data?.sheet;
@@ -1965,10 +2382,24 @@ function setup(ctx) {
           <div class="wc-field"><label>Custom DC</label><input class="wc-input" id="wc-m-dc" type="number" min="1" max="40" value="${rollDraft.dc}" /></div>
           <div class="wc-field"><label>Gear Bonus (-3 to +3)</label><input class="wc-input" id="wc-m-gear" type="number" min="-3" max="3" value="${autoGear}" /></div>
         </div>
+        ${(sheet?.skills || []).length > 0 ? `<div class="wc-field"><label>Skill (adds its dice bonus)</label><select class="wc-select" id="wc-m-skill"><option value="">\u2014 no skill \u2014</option>${(sheet.skills || []).map((sk) => {
+      const b = Number(sk.bonus) || 0;
+      return `<option value="${esc(sk.id)}">${esc(sk.name)} (${b >= 0 ? "+" : ""}${b})</option>`;
+    }).join("")}</select></div>` : ""}
+        <div class="wc-field"><label>Edge</label>${edgeSegHtml("wc-m-edge", rollDraft.mode)}</div>
+        ${(data?.world?.npcs || []).some((n) => n.present) ? `<div class="wc-row-2">
+          <div class="wc-field"><label>Opponent (contested)</label><select class="wc-select" id="wc-m-opp"><option value="">\u2014 none \u2014</option>${(data.world.npcs || []).filter((n) => n.present).map((n) => `<option value="${esc(n.name)}">${esc(n.name)}</option>`).join("")}</select></div>
+          <div class="wc-field"><label>Foe Bonus</label><input class="wc-input" id="wc-m-foebonus" type="number" min="-5" max="10" value="3" /></div>
+        </div>` : ""}
+        ${settings?.survivalEnabled ? `<div class="wc-actions-row" style="margin-top:4px">
+          <button class="wc-btn" id="wc-m-scavenge" title="WIS check vs your survival DC \u2014 finds go into the bag">${icon("compass", 14)} Scavenge</button>
+          <button class="wc-btn" id="wc-m-encounter" title="d20 scan \u2014 who's out there?">${icon("eye", 14)} Encounter</button>
+        </div>` : ""}
         <div class="wc-dim">Rolled with unbiased crypto RNG. Automatically binds the AI's next reply.</div>
         <div class="wc-modal-foot">
           <button class="wc-btn" id="wc-m-cancel">Cancel</button>
-          <button class="wc-btn is-primary" id="wc-m-roll">\u{1F3B2} Roll Fair d20</button>
+          <button class="wc-btn" id="wc-m-contest" title="Roll you vs the selected NPC (higher total wins)">Contest!</button>
+          <button class="wc-btn is-primary" id="wc-m-roll">${icon("d20", 15)} Roll Fair d20</button>
         </div>
       </div>
     `;
@@ -1977,17 +2408,44 @@ function setup(ctx) {
     presetSel?.addEventListener("change", () => {
       if (dcInp && presetSel) dcInp.value = presetSel.value;
     });
+    modal.root.querySelectorAll("#wc-m-edge [data-edge]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        rollDraft.mode = btn.getAttribute("data-edge") || "normal";
+        modal.root.querySelectorAll("#wc-m-edge [data-edge]").forEach((b) => b.classList.toggle("is-active", b === btn));
+      });
+    });
     modal.root.querySelector("#wc-m-cancel")?.addEventListener("click", () => modal.dismiss());
-    modal.root.querySelector("#wc-m-roll")?.addEventListener("click", () => {
+    modal.root.querySelector("#wc-m-scavenge")?.addEventListener("click", () => {
+      send("scavenge_roll");
+      modal.dismiss();
+    });
+    modal.root.querySelector("#wc-m-encounter")?.addEventListener("click", () => {
+      send("encounter_roll");
+      modal.dismiss();
+    });
+    const buildPayload = () => {
       const action = modal.root.querySelector("#wc-m-action")?.value.trim() || "Attempt check";
       const stat = modal.root.querySelector("#wc-m-stat")?.value || "none";
       const dc = Number(dcInp?.value || 15);
       const gearBonus = Number(modal.root.querySelector("#wc-m-gear")?.value || 0);
+      const skillId = modal.root.querySelector("#wc-m-skill")?.value || "";
+      const skill = (sheet?.skills || []).find((sk) => sk.id === skillId);
+      const skillBonus = skill ? Number(skill.bonus) || 0 : 0;
       rollDraft.action = action;
       rollDraft.stat = stat;
       rollDraft.dc = dc;
       rollDraft.gearBonus = gearBonus;
-      send("roll_dice", { action, stat, dc, gearBonus });
+      return { action, stat, dc, gearBonus, skillBonus, skillLabel: skill ? skill.name : "", mode: rollDraft.mode };
+    };
+    modal.root.querySelector("#wc-m-roll")?.addEventListener("click", () => {
+      send("roll_dice", buildPayload());
+      modal.dismiss();
+    });
+    modal.root.querySelector("#wc-m-contest")?.addEventListener("click", () => {
+      const opponent = modal.root.querySelector("#wc-m-opp")?.value || "";
+      if (!opponent) return;
+      const foeBonus = Number(modal.root.querySelector("#wc-m-foebonus")?.value || 3);
+      send("contest_roll", { ...buildPayload(), opponent, foeBonus });
       modal.dismiss();
     });
   }
@@ -2018,6 +2476,12 @@ function setup(ctx) {
           <label class="wc-toggle-row"><span>Enable 3rd Pool (MP/Sanity)</span><input type="checkbox" id="wc-id-usemp" ${s.useMp ? "checked" : ""} /></label>
           <div class="wc-field"><label>3rd Pool Label</label><input class="wc-input" id="wc-id-mplbl" value="${esc(s.mpLabel)}" /></div>
         </div>
+        <div class="wc-card-title">Stat Names (setting labels)</div>
+        <div class="wc-row-3">
+          ${STAT_KEYS.map(
+      (k) => `<div class="wc-field"><label>${esc(k.toUpperCase())}</label><input class="wc-input" id="wc-lb-${k}" maxlength="24" value="${esc(s.statLabels[k])}" /></div>`
+    ).join("")}
+        </div>
         <div class="wc-card-title">Direct Stat Overrides</div>
         <div class="wc-row-3">
           ${STAT_KEYS.map(
@@ -2045,7 +2509,8 @@ function setup(ctx) {
           level: Number(val("wc-id-lv")),
           pts: Number(val("wc-id-pts")),
           useMp: modal.root.querySelector("#wc-id-usemp")?.checked ?? false,
-          mpLabel: val("wc-id-mplbl")
+          mpLabel: val("wc-id-mplbl"),
+          statLabels: Object.fromEntries(STAT_KEYS.map((k) => [k, (modal.root.querySelector(`#wc-lb-${k}`)?.value || "").trim().slice(0, 24) || k.toUpperCase()]))
         }
       });
       for (const k of STAT_KEYS) {
@@ -2151,7 +2616,7 @@ function setup(ctx) {
       <div class="wc-modal">
         <div class="wc-field"><label>Quest Title</label><input class="wc-input" id="wc-q-title" value="${esc(existing?.title || "")}" /></div>
         <div class="wc-row-2">
-          <div class="wc-field"><label>Type</label><select class="wc-select" id="wc-q-kind"><option value="main" ${existing?.kind === "main" ? "selected" : ""}>Main</option><option value="side" ${existing?.kind !== "main" ? "selected" : ""}>Side</option></select></div>
+          <div class="wc-field"><label>Type</label><select class="wc-select" id="wc-q-kind"><option value="main" ${existing?.kind === "main" ? "selected" : ""}>Main</option><option value="side" ${existing?.kind === "side" || !existing ? "selected" : ""}>Side</option><option value="daily" ${existing?.kind === "daily" ? "selected" : ""}>Daily</option></select></div>
           <div class="wc-field"><label>Status</label><select class="wc-select" id="wc-q-status"><option value="active" ${!existing || existing.status === "active" ? "selected" : ""}>Active</option><option value="available" ${existing?.status === "available" ? "selected" : ""}>Available</option><option value="done" ${existing?.status === "done" ? "selected" : ""}>Done</option><option value="failed" ${existing?.status === "failed" ? "selected" : ""}>Failed</option></select></div>
         </div>
         <div class="wc-field"><label>Objectives (one per line; prefix "[x] " if done)</label><textarea class="wc-textarea" id="wc-q-obs" rows="3">${esc(obsText)}</textarea></div>
@@ -2194,7 +2659,7 @@ function setup(ctx) {
       <div class="wc-modal">
         <div class="wc-field"><label>Current Location</label><input class="wc-input" id="wc-w-loc" value="${esc(w.location)}" /></div>
         <div class="wc-row-2">
-          <div class="wc-field"><label>Time / Timeline</label><input class="wc-input" id="wc-w-time" value="${esc(w.time)}" /></div>
+          ${settings?.clockEnabled ? `<div class="wc-field"><label>Time (managed by Scene Clock)</label><input class="wc-input" id="wc-w-time" value="${esc(w.time)}" disabled title="Disable Scene Clock in Settings to edit time freely." /></div>` : `<div class="wc-field"><label>Time / Timeline</label><input class="wc-input" id="wc-w-time" value="${esc(w.time)}" /></div>`}
           <div class="wc-field"><label>Day #</label><input class="wc-input" id="wc-w-day" type="number" min="1" value="${w.dayCount}" /></div>
         </div>
         <div class="wc-row-2">
@@ -2206,6 +2671,14 @@ function setup(ctx) {
           <div class="wc-field"><label>Scene Mood</label><input class="wc-input" id="wc-w-mood" value="${esc(w.mood)}" /></div>
         </div>
         <div class="wc-field"><label>Notes</label><textarea class="wc-textarea" id="wc-w-notes" rows="2">${esc(w.notes)}</textarea></div>
+        <div class="wc-row-2">
+          <div class="wc-field"><label>PC Outfit</label><input class="wc-input" id="wc-w-pc-outfit" value="${esc(w.pc?.outfit || "")}" placeholder="Rain-soaked coat" /></div>
+          <div class="wc-field"><label>PC Position</label><input class="wc-input" id="wc-w-pc-pos" value="${esc(w.pc?.pos || "")}" placeholder="On the rail, hand on the brass key" /></div>
+        </div>
+        <div class="wc-row-2">
+          <div class="wc-field"><label>PC Condition</label><input class="wc-input" id="wc-w-pc-cond" value="${esc(w.pc?.cond || "")}" placeholder="Exhausted, left side numb" /></div>
+          <div class="wc-field"><label>PC Carrying</label><input class="wc-input" id="wc-w-pc-carry" value="${esc(w.pc?.carry || "")}" placeholder="Brass key, revolver, locket" /></div>
+        </div>
         <div class="wc-modal-foot"><button class="wc-btn" id="wc-w-cancel">Cancel</button><button class="wc-btn is-primary" id="wc-w-save">Save</button></div>
       </div>
     `;
@@ -2214,20 +2687,54 @@ function setup(ctx) {
       send("update_world", {
         patch: {
           location: modal.root.querySelector("#wc-w-loc")?.value || "",
-          time: modal.root.querySelector("#wc-w-time")?.value || "",
+          ...settings?.clockEnabled ? {} : { time: modal.root.querySelector("#wc-w-time")?.value || "" },
           dayCount: Number(modal.root.querySelector("#wc-w-day")?.value || 1),
           arc: modal.root.querySelector("#wc-w-arc")?.value || "",
           phase: modal.root.querySelector("#wc-w-phase")?.value || "",
           weather: modal.root.querySelector("#wc-w-weather")?.value || "",
           mood: modal.root.querySelector("#wc-w-mood")?.value || "",
-          notes: modal.root.querySelector("#wc-w-notes")?.value || ""
+          notes: modal.root.querySelector("#wc-w-notes")?.value || "",
+          pc: {
+            outfit: modal.root.querySelector("#wc-w-pc-outfit")?.value || "",
+            pos: modal.root.querySelector("#wc-w-pc-pos")?.value || "",
+            cond: modal.root.querySelector("#wc-w-pc-cond")?.value || "",
+            carry: modal.root.querySelector("#wc-w-pc-carry")?.value || ""
+          }
         }
       });
       modal.dismiss();
     });
   }
+  function openBackupModal(list) {
+    const modal = ctx.ui.showModal({ title: "Automatic Backups (This Chat)", width: 460 });
+    const rows = (Array.isArray(list) ? list : []).map((b) => {
+      const ts = b && Number.isFinite(b.ts) ? b.ts : 0;
+      const label = ts ? new Date(ts).toLocaleString() : "Unknown backup";
+      return `
+        <div class="wc-synclog-row is-ok" style="justify-content:space-between;gap:12px">
+          <span>${esc(label)}</span>
+          <button class="wc-btn is-xs" data-act="restore_backup" data-path="${esc(b.path)}">Restore</button>
+        </div>`;
+    }).join("");
+    modal.root.innerHTML = `
+      <div class="wc-modal">
+        <div class="wc-muted" style="margin-bottom:6px">Last ${list?.length || 0} automatic backups (one per minute, newest first). Restoring replaces this chat's sheet, tracker and dice history.</div>
+        <div class="wc-synclog">${rows || '<div class="wc-dim">No backups yet \u2014 they are written as state syncs.</div>'}</div>
+        <div class="wc-modal-foot"><button class="wc-btn" id="wc-bk-close">Close</button></div>
+      </div>
+    `;
+    modal.root.querySelector("#wc-bk-close")?.addEventListener("click", () => modal.dismiss());
+    modal.root.addEventListener("click", (ev) => {
+      const btn = ev.target.closest('[data-act="restore_backup"]');
+      if (!btn) return;
+      const path = btn.getAttribute("data-path") || "";
+      if (!path) return;
+      send("restore_backup", { path });
+      modal.dismiss();
+    });
+  }
   function openNpcModal(existing) {
-    const modal = ctx.ui.showModal({ title: existing ? `Edit NPC \xB7 ${existing.name}` : "Add NPC", width: 430, maxHeight: 580 });
+    const modal = ctx.ui.showModal({ title: "Edit NPC", width: 430, maxHeight: 580 });
     modal.root.innerHTML = `
       <div class="wc-modal">
         <div class="wc-row-2">
@@ -2274,10 +2781,39 @@ function setup(ctx) {
       modal.dismiss();
     });
   }
+  function openChatLogModal(report) {
+    const counts = [
+      ["<Status>", report.status],
+      ["<World_State>", report.world],
+      ["<Dice>", report.dice],
+      ["<choices>", report.choices]
+    ].filter(([, n]) => n > 0);
+    const warnings = Array.isArray(report.warnings) ? report.warnings : [];
+    const modal = ctx.ui.showModal({ title: "Import from Chat Log", width: 480 });
+    modal.root.innerHTML = `
+      <div class="wc-modal">
+        ${counts.length > 0 ? `<div class="wc-field"><label>Found in this chat's history</label>
+          <div class="wc-actions-row" style="flex-wrap:wrap">${counts.map(([tag, n]) => `<span class="wc-chip is-active">${esc(tag)} \xD7 ${n}</span>`).join("")}</div>
+        </div>` : `<div class="wc-dim">No preset state blocks found in this chat's history.</div>`}
+        ${report.latestName || report.latestLevel ? `<div class="wc-dim">Latest snapshot: ${report.latestName ? esc(report.latestName) : "?"}${report.latestLevel ? ` \xB7 Lv ${report.latestLevel}` : ""}</div>` : ""}
+        ${warnings.length > 0 ? `<div class="wc-field"><label>Health check</label>${warnings.map((w) => `<div class="wc-banner" style="margin-bottom:6px"><span>${esc(w)}</span></div>`).join("")}</div>` : `<div class="wc-dim">No double-rendering detected \u2014 the preset appears to be configured cleanly.</div>`}
+        <div class="wc-dim">Importing replaces the extension's current sheet/world for this chat with the last <code>&lt;Status&gt;</code> / <code>&lt;World_State&gt;</code> in the log. A forced backup is taken first. Rolls and notices are kept.</div>
+        <div class="wc-modal-foot">
+          <button class="wc-btn" id="wc-clr-cancel">Close</button>
+          ${report.canImport ? `<button class="wc-btn is-primary" id="wc-clr-import">Import &amp; Replace Chat State</button>` : ""}
+        </div>
+      </div>
+    `;
+    modal.root.querySelector("#wc-clr-cancel")?.addEventListener("click", () => modal.dismiss());
+    modal.root.querySelector("#wc-clr-import")?.addEventListener("click", () => {
+      send("import_chatlog");
+      modal.dismiss();
+    });
+  }
   function openSimpleAddModal(kind) {
     if (kind === "export" && data) {
       const modal = ctx.ui.showModal({ title: "Export Weft Chronicle JSON", width: 460 });
-      const json = JSON.stringify({ sheet: data.sheet, world: data.world, rolls: data.rolls }, null, 2);
+      const json = JSON.stringify({ format: "weft-chronicle", version: 3, exportedAt: (/* @__PURE__ */ new Date()).toISOString(), sheet: data.sheet, world: data.world, rolls: data.rolls }, null, 2);
       modal.root.innerHTML = `
         <div class="wc-modal">
           <textarea class="wc-textarea" id="wc-exp" rows="12" readonly>${esc(json)}</textarea>
@@ -2292,6 +2828,118 @@ function setup(ctx) {
         });
       });
       modal.root.querySelector("#wc-exp-close")?.addEventListener("click", () => modal.dismiss());
+      return;
+    }
+    if (kind === "export_rolls" && data) {
+      const modal = ctx.ui.showModal({ title: "Export Roll History", width: 520 });
+      const rolls = Array.isArray(data.rolls) ? data.rolls : [];
+      const mdCell = (v) => String(v ?? "").replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ").trim();
+      const toMarkdown = () => [
+        "| When | Who | Action | d20 | Mods | DC | Total | Verdict |",
+        "|---|---|---|---|---|---|---|---|",
+        ...rolls.map((r) => {
+          const mods = [
+            r.stat === "none" ? "flat" : `${String(r.stat).toUpperCase()} ${formatMod(r.statMod)}`,
+            r.gearBonus !== 0 ? `gear ${formatMod(r.gearBonus)}` : null,
+            r.skillLabel ? `${r.skillLabel} ${formatMod(r.skillBonus)}` : null
+          ].filter(Boolean).join(" ");
+          const edge = r.mode === "adv" ? " ADV" : r.mode === "dis" ? " DIS" : "";
+          const when = new Date(r.timestamp).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+          return ["", when, r.who, r.action, `${r.roll}${edge}`, mods, r.dc, r.total, String(r.verdict).toUpperCase(), ""].map(mdCell).join("|");
+        })
+      ].join("\n");
+      const toJson = () => JSON.stringify({ format: "weft-chronicle-rolls", version: 1, exportedAt: (/* @__PURE__ */ new Date()).toISOString(), rolls }, null, 2);
+      modal.root.innerHTML = `
+        <div class="wc-modal">
+          <div class="wc-field"><label>Format</label>
+            <div class="wc-actions-row">
+              <button class="wc-btn is-xs" data-fmt="md">Markdown</button>
+              <button class="wc-btn is-xs" data-fmt="json">JSON</button>
+            </div>
+          </div>
+          <textarea class="wc-textarea" id="wc-expr" rows="12" readonly></textarea>
+          <div class="wc-modal-foot">
+            <button class="wc-btn is-primary" id="wc-expr-copy">Copy</button>
+            <button class="wc-btn" id="wc-expr-close">Close</button>
+          </div>
+        </div>
+      `;
+      const area = modal.root.querySelector("#wc-expr");
+      const setFmt = (fmt) => {
+        area.value = fmt === "json" ? toJson() : toMarkdown();
+      };
+      modal.root.querySelectorAll("[data-fmt]").forEach((btn) => btn.addEventListener("click", () => setFmt(btn.dataset.fmt)));
+      setFmt("md");
+      modal.root.querySelector("#wc-expr-copy")?.addEventListener("click", () => {
+        area.select();
+        navigator.clipboard?.writeText(area.value).catch(() => {
+        });
+      });
+      modal.root.querySelector("#wc-expr-close")?.addEventListener("click", () => modal.dismiss());
+      return;
+    }
+    if (kind === "export_settings" && settings) {
+      const modal = ctx.ui.showModal({ title: "Export Settings", width: 460 });
+      const json = JSON.stringify({ format: "weft-chronicle-settings", version: 1, exportedAt: (/* @__PURE__ */ new Date()).toISOString(), settings }, null, 2);
+      modal.root.innerHTML = `
+        <div class="wc-modal">
+          <textarea class="wc-textarea" id="wc-exs" rows="12" readonly>${esc(json)}</textarea>
+          <div class="wc-modal-foot">
+            <button class="wc-btn is-primary" id="wc-exs-copy">Copy JSON</button>
+            <button class="wc-btn" id="wc-exs-close">Close</button>
+          </div>
+        </div>
+      `;
+      modal.root.querySelector("#wc-exs-copy")?.addEventListener("click", () => {
+        const ta = modal.root.querySelector("#wc-exs");
+        ta?.select();
+        navigator.clipboard?.writeText(json).catch(() => {
+        });
+      });
+      modal.root.querySelector("#wc-exs-close")?.addEventListener("click", () => modal.dismiss());
+      return;
+    }
+    if (kind === "import_settings") {
+      const modal = ctx.ui.showModal({ title: "Import Settings", width: 460 });
+      modal.root.innerHTML = `
+        <div class="wc-modal">
+          <div class="wc-field"><label>Paste an exported settings JSON</label><textarea class="wc-textarea" id="wc-ims" rows="10" placeholder='{"format":"weft-chronicle-settings","settings":{...}}'></textarea></div>
+          <div class="wc-modal-foot"><button class="wc-btn" id="wc-ims-cancel">Cancel</button><button class="wc-btn is-primary" id="wc-ims-go">Import</button></div>
+        </div>
+      `;
+      modal.root.querySelector("#wc-ims-cancel")?.addEventListener("click", () => modal.dismiss());
+      modal.root.querySelector("#wc-ims-go")?.addEventListener("click", () => {
+        const raw = modal.root.querySelector("#wc-ims")?.value || "";
+        try {
+          const parsed = JSON.parse(raw);
+          const patch = parsed && typeof parsed === "object" && parsed.settings && typeof parsed.settings === "object" ? parsed.settings : parsed;
+          if (patch && typeof patch === "object" && !Array.isArray(patch)) send("update_settings", { patch });
+        } catch {
+        }
+        modal.dismiss();
+      });
+      return;
+    }
+    if (kind === "export_weft" && data) {
+      const modal = ctx.ui.showModal({ title: "Export Weft <Status>/<World_State>", width: 520 });
+      const block = renderWeftBlock(data);
+      modal.root.innerHTML = `
+        <div class="wc-modal">
+          <div class="wc-field"><label>Paste into chat as a user message, or into a preset for hand-editing</label>
+            <textarea class="wc-textarea" id="wc-expw" rows="12" readonly>${esc(block)}</textarea>
+          </div>
+          <div class="wc-modal-foot">
+            <button class="wc-btn is-primary" id="wc-expw-copy">Copy Block</button>
+            <button class="wc-btn" id="wc-expw-close">Close</button>
+          </div>
+        </div>
+      `;
+      modal.root.querySelector("#wc-expw-copy")?.addEventListener("click", () => {
+        modal.root.querySelector("#wc-expw")?.select();
+        navigator.clipboard?.writeText(block).catch(() => {
+        });
+      });
+      modal.root.querySelector("#wc-expw-close")?.addEventListener("click", () => modal.dismiss());
       return;
     }
     if (kind === "import") {
@@ -2347,6 +2995,7 @@ function setup(ctx) {
           <div class="wc-field"><label>Skill Name</label><input class="wc-input" id="wc-sk-name" placeholder="e.g., Field Triage, Lockpicking" /></div>
           <div class="wc-field"><label>Cost (optional)</label><input class="wc-input" id="wc-sk-cost" placeholder="e.g., 4 SP or Passive" /></div>
           <div class="wc-field"><label>Note</label><input class="wc-input" id="wc-sk-note" /></div>
+          <div class="wc-field"><label>Dice Bonus (optional)</label><input class="wc-input" id="wc-sk-bonus" type="number" min="-2" max="10" placeholder="e.g., 2 \u2014 applies when rolling a relevant check" /></div>
           <div class="wc-modal-foot"><button class="wc-btn" id="wc-sk-c">Cancel</button><button class="wc-btn is-primary" id="wc-sk-s">Add</button></div>
         </div>
       `;
@@ -2354,11 +3003,13 @@ function setup(ctx) {
       modal.root.querySelector("#wc-sk-s")?.addEventListener("click", () => {
         const name = modal.root.querySelector("#wc-sk-name")?.value.trim();
         if (!name) return;
+        const bonus = Number(modal.root.querySelector("#wc-sk-bonus")?.value || 0);
         send("add_skill", {
           skill: {
             name,
             cost: modal.root.querySelector("#wc-sk-cost")?.value.trim() || "",
-            note: modal.root.querySelector("#wc-sk-note")?.value.trim() || ""
+            note: modal.root.querySelector("#wc-sk-note")?.value.trim() || "",
+            bonus: Number.isFinite(bonus) ? Math.min(10, Math.max(-2, Math.floor(bonus))) : 0
           }
         });
         modal.dismiss();
@@ -2370,22 +3021,25 @@ function setup(ctx) {
       modal.root.innerHTML = `
         <div class="wc-modal">
           <div class="wc-field"><label>Title</label><input class="wc-input" id="wc-th-t" placeholder="e.g., Radio broadcast from Highway 111" /></div>
-          <div class="wc-field"><label>Kind</label><select class="wc-select" id="wc-th-st"><option value="active">Open Thread</option><option value="seed">Seed / Timer</option><option value="resolved">Resolved</option></select></div>
+          <div class="wc-field"><label>Kind</label><select class="wc-select" id="wc-th-st"><option value="active">Open Thread</option><option value="seed">Seed</option><option value="timer">Countdown Timer</option><option value="resolved">Resolved</option></select></div>
+          <div class="wc-field" id="wc-th-turns-wrap" style="display:none"><label>Turns until it lands</label><input class="wc-input" id="wc-th-turns" type="number" min="1" max="99" value="3" /></div>
           <div class="wc-field"><label>Detail</label><textarea class="wc-textarea" id="wc-th-d" rows="2"></textarea></div>
           <div class="wc-modal-foot"><button class="wc-btn" id="wc-th-c">Cancel</button><button class="wc-btn is-primary" id="wc-th-s">Add</button></div>
         </div>
       `;
+      const kindSel = modal.root.querySelector("#wc-th-st");
+      const turnsWrap = modal.root.querySelector("#wc-th-turns-wrap");
+      kindSel?.addEventListener("change", () => {
+        if (turnsWrap) turnsWrap.style.display = kindSel.value === "timer" ? "" : "none";
+      });
       modal.root.querySelector("#wc-th-c")?.addEventListener("click", () => modal.dismiss());
       modal.root.querySelector("#wc-th-s")?.addEventListener("click", () => {
         const title = modal.root.querySelector("#wc-th-t")?.value.trim();
         if (!title) return;
-        send("upsert_thread", {
-          thread: {
-            title,
-            status: modal.root.querySelector("#wc-th-st")?.value,
-            detail: modal.root.querySelector("#wc-th-d")?.value.trim() || ""
-          }
-        });
+        const kindVal = modal.root.querySelector("#wc-th-st")?.value;
+        const turns = Math.floor(Number(modal.root.querySelector("#wc-th-turns")?.value || 3));
+        const thread = kindVal === "timer" ? { title, status: "active", kind: "timer", turnsLeft: Math.min(99, Math.max(1, Number.isFinite(turns) ? turns : 3)), detail: modal.root.querySelector("#wc-th-d")?.value.trim() || "" } : { title, status: kindVal, detail: modal.root.querySelector("#wc-th-d")?.value.trim() || "" };
+        send("upsert_thread", { thread });
         modal.dismiss();
       });
     }
@@ -2401,6 +3055,172 @@ function setup(ctx) {
       </div>
     `;
   }
+  var noticeFilter = "all";
+  var NOTICE_FILTERS = [
+    ["all", "All"],
+    ["levelup", "Level"],
+    ["quest", "Quests"],
+    ["item", "Items"],
+    ["skill", "Skills"],
+    ["warn", "Warnings"],
+    ["change", "Changes"]
+  ];
+  var ARC_TO_WEFT = { opening: "Setup", rising: "Escalation", turning: "Complication", climax: "Crisis", fallout: "Resolution" };
+  var PHASE_TO_WEFT = { setup: "Early Simmer", tension: "Building", confrontation: "Midpoint Tension", intimacy: "Climax", aftermath: "Breather" };
+  var WEFT_ARC_WORDS = /* @__PURE__ */ new Set(["setup", "escalation", "complication", "crisis", "resolution"]);
+  var WEFT_PHASE_WORDS = /* @__PURE__ */ new Set(["early simmer", "building", "midpoint tension", "climax", "breather"]);
+  function weftLadder(value, toWeft, known) {
+    const s = String(value || "").trim();
+    if (!s) return null;
+    const lower = s.toLowerCase();
+    if (known.has(lower)) return s;
+    return toWeft[lower] || s;
+  }
+  function renderWeftBlock(d) {
+    const s = d.sheet;
+    const w = d.world;
+    const th = escXmlAttr("sakura");
+    const tag = (name, content, attrs) => {
+      const attrStr = attrs ? ` ${attrs}` : "";
+      return `<${name}${attrStr}>${content}</${name}>`;
+    };
+    const optTag = (name, value, attrs) => {
+      const v = String(value ?? "").trim();
+      return v ? `<${name}${attrs ? ` ${attrs}` : ""}>${escXml(v)}</${name}>` : "";
+    };
+    const lines = [];
+    const status = [];
+    status.push(`<Status th="${th}">`);
+    status.push(`${optTag("nm", s.name)}${optTag("lv", s.level)}${optTag("race", s.race)}${optTag("rank", s.rank)}`);
+    status.push(`${optTag("cls", s.cls)}${optTag("subcls", s.subcls)}${optTag("guild", s.guild)}${optTag("ttl", s.title)}`);
+    status.push(`${optTag("hp", `${s.hp}/${s.hpMax}`)}${s.useMp ? optTag("mp", `${s.mp}/${s.mpMax}`, s.mpLabel && s.mpLabel !== "MP" ? `l="${escXmlAttr(s.mpLabel)}"` : "") : ""}${optTag("sp", `${s.sp}/${s.spMax}`)}`);
+    status.push(optTag("xp", `${s.xp}/${s.xpNext}`));
+    const statTag = (k) => {
+      const label = s.statLabels?.[k] || k.toUpperCase();
+      const renamed = label && label.toUpperCase() !== k.toUpperCase();
+      return `<${k}${renamed ? ` l="${escXmlAttr(label)}"` : ""}>${s.stats[k]}</${k}>`;
+    };
+    status.push(STAT_KEYS.map(statTag).join(""));
+    if (s.pts > 0) status.push(optTag("pts", s.pts));
+    const gearLine = (tag2, key) => {
+      const it = s.gear?.[key];
+      if (!it) return "";
+      const r = it.rarity && it.rarity !== "ordinary" ? ` (${it.rarity})` : "";
+      const q = it.qty > 1 ? ` x${it.qty}` : "";
+      return `<${tag2}><it>${escXml(it.name)}${escXml(r)}${escXml(q)}</it></${tag2}>`;
+    };
+    status.push(`${gearLine("wpn", "weapon")}${gearLine("arm", "armor")}${gearLine("acc", "accessory")}`);
+    const skl = (s.skills || []).map((k) => `<it>${escXml(k.name)}${Number(k.bonus) ? ` +${Number(k.bonus)}` : ""}</it>`).join("");
+    if (skl) status.push(`<skl>${skl}</skl>`);
+    const fx = (s.effects || []).map((e) => `<it>${escXml(e.name)}: ${e.duration === null ? "ongoing" : `${e.duration}t`}</it>`).join("");
+    if (fx) status.push(`<fx>${fx}</fx>`);
+    status.push(`<log>Exported from Weft Chronicle</log>`);
+    const bag = (s.bag || []).map((it) => `<itm t="${escXmlAttr(it.category)}" r="${escXmlAttr(it.rarity)}" n="${it.qty}">${escXml(it.name)}</itm>`).join("\n");
+    if (bag) status.push(`<bag>
+${bag}
+</bag>`);
+    if (s.cash) status.push(optTag("cash", s.cash));
+    const quests = (s.quests || []).map((q) => {
+      const obs = (q.objectives || []).map((o) => `<ob x="${o.done ? 1 : 0}">${escXml(o.text)}${o.progress ? ` (${escXml(o.progress)})` : ""}</ob>`).join("");
+      return `<quest s="${escXmlAttr(q.status)}" k="${escXmlAttr(q.kind || "side")}"><qt>${escXml(q.title)}</qt>${obs}${q.reward ? `<rw>${escXml(q.reward)}</rw>` : ""}${q.penalty ? `<pn>${escXml(q.penalty)}</pn>` : ""}</quest>`;
+    }).join("\n");
+    if (quests) status.push(`<quests>
+${quests}
+</quests>`);
+    status.push(`</Status>`);
+    const world = [];
+    world.push(`<World_State th="${th}" st="strip">`);
+    {
+      const raw = String(w.time || "");
+      const cleaned = raw.replace(new RegExp(`^Day ${Number(w.dayCount) || 1}\\s*[\xB7,\u2014-]\\s*`), "").trim();
+      world.push(optTag("clock", [`Day ${w.dayCount}`, cleaned].filter(Boolean).join(", ")));
+    }
+    world.push(optTag("place", w.location));
+    if (w.weather) world.push(`<weather>${escXml(w.weather)}</weather>`);
+    const pc = w.pc || {};
+    const pcLines = [
+      ["name", s.name],
+      ["outfit", pc.outfit],
+      ["pos", pc.pos],
+      ["cond", pc.cond],
+      ["carry", pc.carry]
+    ].filter(([, v]) => String(v || "").trim());
+    if (pcLines.length > 1 || pcLines.length === 1 && pcLines[0][0] !== "name") {
+      world.push(`<pc>
+${pcLines.map(([k, v]) => `${k}: ${escXml(v)}`).join("\n")}
+</pc>`);
+    }
+    for (const n of (w.npcs || []).filter((x) => x.present)) {
+      const npc = [];
+      npc.push(`<npc>`);
+      npc.push(`name: ${escXml(n.name)}`);
+      npc.push(`mood: ${escXml(n.mood || n.attitude || "Guarded")}`);
+      if (n.lastThought) npc.push(`think: ${escXml(n.lastThought)}`);
+      npc.push(`pos: ${escXml(n.location || "In scene")}`);
+      if (n.goal) npc.push(`want: ${escXml(n.goal)}`);
+      npc.push(`bond: ${n.bond} | ${bshStage("bond", n.bond)}`);
+      npc.push(`spark: ${n.spark} | ${bshStage("spark", n.spark)}`);
+      if (n.heat >= 25) npc.push(`heat: ${n.heat} | ${bshStage("heat", n.heat)}`);
+      if (n.secret) npc.push(`secret: ${escXml(n.secret)}`);
+      npc.push(`</npc>`);
+      world.push(npc.join("\n"));
+    }
+    for (const n of (w.npcs || []).filter((x) => !x.present)) {
+      world.push(`<off>${escXml(n.name)}: ${escXml(n.location || "elsewhere")}</off>`);
+    }
+    const threads = (w.threads || []).filter((t) => t.status === "active" && t.kind !== "timer");
+    const seeds = (w.threads || []).filter((t) => t.status === "seed" && t.kind !== "timer");
+    const timers = (w.threads || []).filter((t) => t.kind === "timer" && t.status !== "resolved");
+    for (const t of threads) world.push(`<thread>${escXml(t.title)}${t.detail ? ` \u2014 ${escXml(t.detail)}` : ""}</thread>`);
+    for (const t of seeds) world.push(`<seed>${escXml(t.title)}${t.detail ? ` \u2014 ${escXml(t.detail)}` : ""}</seed>`);
+    for (const t of timers) world.push(`<timer>${escXml(t.title)}${t.detail ? `: ${escXml(t.detail)}` : ""}: ${t.turnsLeft} turns left</timer>`);
+    const arc = weftLadder(w.arc, ARC_TO_WEFT, WEFT_ARC_WORDS);
+    const phase = weftLadder(w.phase, PHASE_TO_WEFT, WEFT_PHASE_WORDS);
+    if (arc) world.push(`<arc>${escXml(arc)}</arc>`);
+    if (phase) world.push(`<phase>${escXml(phase)}</phase>`);
+    world.push(`</World_State>`);
+    lines.push(status.filter(Boolean).join("\n"));
+    lines.push(world.filter(Boolean).join("\n"));
+    return lines.join("\n");
+  }
+  function groupNotices(list) {
+    const out = [];
+    for (const n of list) {
+      const linesKey = JSON.stringify(Array.isArray(n.lines) ? n.lines : []);
+      const prev = out.length > 0 ? out[out.length - 1] : null;
+      if (prev && prev.kind === n.kind && prev.title === n.title && prev.linesKey === linesKey) {
+        prev.count += 1;
+        prev.ids.push(n.id);
+      } else {
+        out.push({ kind: n.kind, title: n.title, linesKey, count: 1, notice: n, ids: [n.id] });
+      }
+    }
+    return out;
+  }
+  function renderNoticeFeed(d) {
+    const list = Array.isArray(d.notices) ? d.notices : [];
+    if (list.length === 0) return "";
+    const filtered = list.filter((n) => noticeFilter === "all" || n.kind === noticeFilter);
+    const grouped = groupNotices(filtered.slice(0, 12));
+    const chips = NOTICE_FILTERS.map(([k, label]) => `<button class="wc-chip ${noticeFilter === k ? "is-active" : ""}" data-act="notice_filter" data-filter="${k}">${label}</button>`).join("");
+    return `
+    <div class="wc-card">
+      <div class="wc-card-head"><span class="wc-card-title">Notifications</span><span class="wc-dim">${filtered.length} of ${list.length}</span></div>
+      <div class="wc-chip-row">${chips}</div>
+      <div class="wc-notif-list">
+        ${grouped.length === 0 ? `<div class="wc-dim">Nothing in this filter.</div>` : grouped.map((g) => `
+          <div class="wc-notif-row" data-k="${esc(g.notice.kind || "")}">
+            <div class="wc-notif-main">
+              <b>${esc(g.notice.title)}${g.count > 1 ? ` <span class="wc-pill">\xD7${g.count}</span>` : ""}</b>
+              <span>${esc((g.notice.lines || []).join(" \xB7 "))}</span>
+            </div>
+            <button class="wc-btn is-xs" data-act="dismiss_notice" data-ids="${esc(g.ids.join(","))}" title="Dismiss" aria-label="Dismiss notification">\xD7</button>
+          </div>`).join("")}
+      </div>
+      <div class="wc-actions-row" style="justify-content:flex-end"><button class="wc-btn is-xs" data-act="clear_notices">Clear All</button></div>
+    </div>
+  `;
+  }
   function renderSystemTab(d, cfg) {
     if (!d.modules.system) {
       return renderModuleDisabledCard(
@@ -2409,17 +3229,11 @@ function setup(ctx) {
         "System stats, HP/SP/XP, inventory, quests, and System Notifications are paused for this chat (0 prompt tokens used)."
       );
     }
-    const sysTh = resolveSystemTheme(cfg);
     const initBanner = !d.initialized ? `<div class="wc-banner">
            <span>Not initialized for this chat yet.</span>
-           <button class="wc-btn is-primary is-xs" data-act="init_ai" ${syncing ? "disabled" : ""}>\u2728 Initialize with AI</button>
+           <button class="wc-btn is-primary is-xs" data-act="init_ai" ${syncing ? "disabled" : ""}>${icon("sparkles", 13)} Initialize with AI</button>
          </div>` : "";
-    const latestNotices = d.notices.length > 0 ? `<div>
-             ${renderNoticeCard(d.notices[0], sysTh)}
-             <div class="wc-actions-row" style="justify-content:flex-end; margin-top:2px;">
-               <button class="wc-btn is-xs" data-act="clear_notices">Clear Notices (${d.notices.length})</button>
-             </div>
-           </div>` : "";
+    const latestNotices = renderNoticeFeed(d);
     return `
       ${initBanner}
       ${latestNotices}
@@ -2449,7 +3263,7 @@ function setup(ctx) {
     }
     const initBanner = !d.initialized ? `<div class="wc-banner">
            <span>Tracker not initialized yet.</span>
-           <button class="wc-btn is-primary is-xs" data-act="init_ai" ${syncing ? "disabled" : ""}>\u2728 Initialize with AI</button>
+           <button class="wc-btn is-primary is-xs" data-act="init_ai" ${syncing ? "disabled" : ""}>${icon("sparkles", 13)} Initialize with AI</button>
          </div>` : "";
     return `
       ${initBanner}
@@ -2490,19 +3304,64 @@ function setup(ctx) {
           <div class="wc-field"><label>DC</label><input class="wc-input" id="wc-d-dc" type="number" min="1" max="40" value="${rollDraft.dc}" /></div>
           <div class="wc-field"><label>Gear</label><input class="wc-input" id="wc-d-gear" type="number" min="-3" max="3" value="${autoGear}" /></div>
         </div>
+        ${(d.sheet.skills || []).length > 0 ? `<div class="wc-field"><label>Skill (adds its dice bonus)</label><select class="wc-select" id="wc-d-skill"><option value="">\u2014 no skill \u2014</option>${d.sheet.skills.map((sk) => {
+      const b = Number(sk.bonus) || 0;
+      return `<option value="${esc(sk.id)}">${esc(sk.name)} (${b >= 0 ? "+" : ""}${b})</option>`;
+    }).join("")}</select></div>` : ""}
+        <div class="wc-field"><label>Edge</label>${edgeSegHtml("wc-d-edge", rollDraft.mode)}</div>
+        ${(d.world?.npcs || []).some((n) => n.present) ? `<div class="wc-row-2">
+          <div class="wc-field"><label>Opponent (contested)</label><select class="wc-select" id="wc-d-opp"><option value="">\u2014 none \u2014</option>${(d.world.npcs || []).filter((n) => n.present).map((n) => `<option value="${esc(n.name)}">${esc(n.name)}</option>`).join("")}</select></div>
+          <div class="wc-field"><label>Foe Bonus</label><input class="wc-input" id="wc-d-foebonus" type="number" min="-5" max="10" value="3" /></div>
+        </div>` : ""}
         <div class="wc-actions-row">
           ${DC_PRESETS.slice(1, 5).map((p) => `<button class="wc-btn is-xs" data-act="set_dc" data-dc="${p.dc}">DC ${p.dc}</button>`).join("")}
-          <button class="wc-btn is-primary" style="margin-left:auto" data-act="inline_roll">\u{1F3B2} Roll d20</button>
+          <button class="wc-btn is-primary" style="margin-left:auto" data-act="inline_contest" title="Roll you vs the selected NPC (higher total wins)">Contest!</button>
+          <button class="wc-btn is-primary" data-act="inline_roll">${icon("d20", 14)} Roll d20</button>
         </div>
       </div>
+
+      ${cfg.survivalEnabled ? `<div class="wc-card">
+        <div class="wc-card-head">
+          <span class="wc-card-title">${icon("compass", 13)} Survival</span>
+          <span class="wc-dim">seeded by chat + date</span>
+        </div>
+        <div class="wc-dim" style="margin-bottom:8px">Scavenge: WIS check vs DC ${Number(cfg.survivalDc) || 15} \u2014 finds go straight into your bag. Encounter: who's out there? Both bind the AI's next reply.</div>
+        <div class="wc-actions-row">
+          <button class="wc-btn" data-act="scavenge_roll" title="Roll d20 + WIS vs your survival DC \u2014 seeded by chat, date and attempt #${(d.scavengeCount || 0) + 1}">${icon("compass", 13)} Scavenge</button>
+          <button class="wc-btn" data-act="encounter_roll" title="Roll d20 \u2014 scans for signs of threats (attempt #${(d.encounterCount || 0) + 1})">${icon("eye", 13)} Encounter</button>
+        </div>
+      </div>` : ""}
 
       ${d.rolls.length > 0 ? `<div class="wc-list">
                ${d.rolls.slice(0, 10).map((r) => renderDiceCard(r, cfg.theme)).join("")}
                <div class="wc-actions-row" style="justify-content:flex-end;">
+                 <button class="wc-btn is-xs" data-act="copy_last_roll" title="Copy the latest roll as plain text for the chat">Copy Last Roll</button>
+                 <button class="wc-btn is-xs" data-act="modal_add" data-kind="export_rolls" title="Download/copy the full roll history as JSON or Markdown">Export History</button>
                  <button class="wc-btn is-xs" data-act="clear_rolls">Clear Roll History</button>
                </div>
              </div>` : `<div class="wc-card"><div class="wc-dim">Rolls use unbiased crypto RNG and automatically bind the AI's next reply.</div></div>`}
     `;
+  }
+  function renderChoicesTab(d, cfg) {
+    if (!d.modules.choices) {
+      return renderModuleDisabledCard(
+        "choices",
+        "CYOA Choices",
+        "The What Now? choices card is turned OFF for this chat."
+      );
+    }
+    const latest = findLatestChoices(d);
+    if (!latest) {
+      return `<div class="wc-card">
+        <div class="wc-card-title">What Now?</div>
+        <div class="wc-dim">No choices in the tracked replies yet. When the story ends with a <code>&lt;choices&gt;</code> block (Weft's CYOA), the options appear here and inline under the reply in chat.</div>
+      </div>`;
+    }
+    return `<div class="wc-card">
+      <div class="wc-card-head"><span class="wc-card-title">What Now? \xB7 Latest Reply</span><span class="wc-dim">one-shot</span></div>
+      ${renderChoicesCard(latest.snap.choices, cfg.theme, { open: true, snapKey: latest.key })}
+      <div class="wc-dim" style="margin-top:8px">Tapping a choice sends it as your next message. Picked paths are marked and can't be sent twice.</div>
+    </div>`;
   }
   function renderSettingsContent(d, cfg) {
     const missingPerms = ["interceptor", "generation", "chats", "chat_mutation", "characters", "personas"].filter(
@@ -2535,6 +3394,10 @@ function setup(ctx) {
                  <span><strong>Fair d20 Dice Roller</strong><small>Real crypto RNG checks & Roll d20 composer button</small></span>
                  <input type="checkbox" data-mod-toggle="dice" ${d.modules.dice ? "checked" : ""} />
                </label>
+               <label class="wc-toggle-row">
+                 <span><strong>CYOA Choices</strong><small>Tappable What Now? card from &lt;choices&gt; blocks \u2014 tap sends your next message</small></span>
+                 <input type="checkbox" data-mod-toggle="choices" ${d.modules.choices ? "checked" : ""} />
+               </label>
              </div>` : ""}
 
       <div class="wc-card">
@@ -2554,6 +3417,8 @@ function setup(ctx) {
         <label class="wc-toggle-row"><span>Show System Notifications in chat</span><input type="checkbox" data-cfg="showInlineNotices" ${cfg.showInlineNotices ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Show Story Tracker card in chat</span><input type="checkbox" data-cfg="showInlineTracker" ${cfg.showInlineTracker ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Show Dice Result cards in chat</span><input type="checkbox" data-cfg="showInlineDice" ${cfg.showInlineDice ? "checked" : ""} /></label>
+        <label class="wc-toggle-row"><span>Compact dice cards (one line)</span><input type="checkbox" data-cfg="inlineDiceCompact" ${cfg.inlineDiceCompact ? "checked" : ""} /></label>
+        <label class="wc-toggle-row"><span>Show CYOA Choice cards in chat</span><input type="checkbox" data-cfg="showInlineChoices" ${cfg.showInlineChoices ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Inline cards start expanded</span><input type="checkbox" data-cfg="inlineStartsOpen" ${cfg.inlineStartsOpen ? "checked" : ""} /></label>
       </div>
 
@@ -2564,6 +3429,13 @@ function setup(ctx) {
             <label>Card & Panel Theme</label>
             <select class="wc-select" id="wc-cfg-theme">
               ${WEFT_THEMES.map((t) => `<option value="${t.id}" ${cfg.theme === t.id ? "selected" : ""}>${esc(t.label)}</option>`).join("")}
+            </select>
+          </div>
+          <div class="wc-field">
+            <label>This Chat's Theme Override</label>
+            <select class="wc-select" id="wc-cfg-chattheme">
+              <option value="">Follow global theme</option>
+              ${WEFT_THEMES.map((t) => `<option value="${t.id}" ${d && d.themeOverride === t.id ? "selected" : ""}>${esc(t.label)}</option>`).join("")}
             </select>
           </div>
           <div class="wc-field">
@@ -2606,10 +3478,108 @@ function setup(ctx) {
             <option value="auto" ${cfg.allocMode === "auto" ? "selected" : ""}>Auto-Assign</option>
           </select>
         </div>
+        <div class="wc-field">
+          <label>Auto-Alloc Priority (optional)</label>
+          <input class="wc-input" id="wc-cfg-allocpriority" value="${esc(cfg.allocPriority || "")}" placeholder="e.g., dex, con, str \u2014 empty = best stats first" />
+        </div>
+        <div class="wc-field">
+          <label>Sync Pacing</label>
+          <select class="wc-select" id="wc-cfg-syncmode">
+            <option value="every" ${cfg.syncMode === "every" ? "selected" : ""}>After every AI reply</option>
+            <option value="every2" ${cfg.syncMode === "every2" ? "selected" : ""}>Every 2nd AI reply</option>
+            <option value="manual" ${cfg.syncMode === "manual" ? "selected" : ""}>Manual only (use Sync Now)</option>
+          </select>
+        </div>
+        <div class="wc-field">
+          <label>Prompt Budget</label>
+          <select class="wc-select" id="wc-cfg-budget">
+            <option value="standard" ${cfg.promptBudget === "standard" ? "selected" : ""}>Standard (full state block)</option>
+            <option value="lean" ${cfg.promptBudget === "lean" ? "selected" : ""}>Lean (~half the tokens)</option>
+          </select>
+        </div>
+        <div class="wc-dim" style="margin:-6px 0 8px">
+          ${promptEstimate ? promptEstimate.tokens > 0 ? `Live prompt block: \u2248<b>${promptEstimate.tokens}</b> tokens (${promptEstimate.chars} chars \xF7 4), injected once per generation.` : `Live prompt block: empty right now \u2014 nothing gets injected for this chat's current settings.` : "Live prompt cost appears after the next state refresh."}
+        </div>
+        <div class="wc-field">
+          <label>XP Curve</label>
+          <select class="wc-select" id="wc-cfg-xpcurve">
+            <option value="flat" ${cfg.xpCurve === "flat" ? "selected" : ""}>Flat (100 \xD7 level)</option>
+            <option value="lifted" ${cfg.xpCurve === "lifted" ? "selected" : ""}>Lifted (100 \xD7 level^1.35)</option>
+          </select>
+        </div>
+        <div class="wc-field">
+          <label>Heat Bar Display</label>
+          <select class="wc-select" id="wc-cfg-heatdisplay">
+            <option value="always" ${cfg.heatDisplay === "always" ? "selected" : ""}>Always</option>
+            <option value="charged" ${cfg.heatDisplay === "charged" ? "selected" : ""}>Only when charged (\u226525)</option>
+          </select>
+        </div>
         <label class="wc-toggle-row"><span>Auto-sync state after every AI reply</span><input type="checkbox" data-cfg="autoSync" ${cfg.autoSync ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Inject live state into AI prompt</span><input type="checkbox" data-cfg="injectPrompt" ${cfg.injectPrompt ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Track XP & automatic level-ups</span><input type="checkbox" data-cfg="trackXp" ${cfg.trackXp ? "checked" : ""} /></label>
+        <label class="wc-toggle-row"><span>Automatic backups of chat state (keep last 5)</span><input type="checkbox" data-cfg="autoBackup" ${cfg.autoBackup !== false ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Enable automatically in new chats</span><input type="checkbox" data-cfg="enabledByDefault" ${cfg.enabledByDefault ? "checked" : ""} /></label>
+      </div>
+
+      <div class="wc-card">
+        <div class="wc-card-head">
+          <span class="wc-card-title">Survival & Scene Clock</span>
+          <span class="wc-dim">off by default</span>
+        </div>
+
+        <div class="wc-card-title" style="margin-top:2px;">${icon("compass", 13)} Survival (Loot & Encounters)</div>
+        <label class="wc-toggle-row"><span>Enable survival rolls in this profile <small>Dice tab buttons + roll quick actions; seeded by chat + date</small></span><input type="checkbox" data-cfg="survivalEnabled" ${cfg.survivalEnabled ? "checked" : ""} /></label>
+        <div class="wc-row-2">
+          <div class="wc-field"><label>Scavenge / Encounter DC</label><input class="wc-input" id="wc-cfg-survivaldc" type="number" min="1" max="40" value="${Number(cfg.survivalDc) || 15}" /></div>
+          <div class="wc-field"><label>Loot Table</label><select class="wc-select" id="wc-cfg-survtable">
+            <option value="wasteland" ${(cfg.survivalTable || "wasteland") === "wasteland" ? "selected" : ""}>Wasteland Salvage</option>
+            <option value="urban" ${cfg.survivalTable === "urban" ? "selected" : ""}>Urban Remnants</option>
+            <option value="wilderness" ${cfg.survivalTable === "wilderness" ? "selected" : ""}>Wilderness Forage</option>
+            <option value="custom" ${cfg.survivalTable === "custom" ? "selected" : ""}>My Table (pasted below)</option>
+          </select></div>
+        </div>
+        <div class="wc-field"><label>Custom Loot Lines</label>
+          <textarea class="wc-textarea" id="wc-cfg-survcustom" rows="4" placeholder="weight | name | qty | category | rarity&#10;8 | Fine-cut cigars | 1 | valuable | uncommon&#10;# lines starting with # are comments">${esc(cfg.survivalCustomTable || "")}</textarea>
+        </div>
+        <div class="wc-dim" style="margin:-4px 0 10px">${(() => {
+      const lines = String(cfg.survivalCustomTable || "").split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith("#"));
+      const ok = lines.filter((l) => {
+        const p = l.split("|").map((x) => x.trim());
+        const w = Number(p[0]);
+        return Number.isFinite(w) && w >= 1 && Boolean(p[1]);
+      }).length;
+      return ok > 0 ? `${ok} custom line(s) in play \u2014 appended to the built-in table (or used alone with \u201CMy Table\u201D).` + (lines.length - ok > 0 ? ` <span style="color:var(--wc-bad)">${lines.length - ok} line(s) rejected \u2014 see format above.</span>` : "") : "Format: <code>weight | name | qty | category | rarity</code> \u2014 custom lines extend the built-in table, or pick \u201CMy Table\u201D to use only yours.";
+    })()}</div>
+
+        <div class="wc-card-title" style="margin-top:4px;">${icon("clock", 13)} Scene Clock & Weather</div>
+        <label class="wc-toggle-row"><span>Advance the scene clock every synced turn <small>phase words only \u2014 \u201CDay 12 \xB7 Evening\u201D in the tracker and prompt</small></span><input type="checkbox" data-cfg="clockEnabled" ${cfg.clockEnabled ? "checked" : ""} /></label>
+        <div class="wc-row-2">
+          <div class="wc-field"><label>Minutes per reply</label><input class="wc-input" id="wc-cfg-clockstep" type="number" min="15" max="180" step="5" value="${Number(cfg.clockStepMinutes) || 45}" /></div>
+          <div class="wc-field"><label>Weather drift chance (%)</label><input class="wc-input" id="wc-cfg-weatherchance" type="number" min="0" max="100" value="${Number.isFinite(Number(cfg.weatherDriftChance)) ? Number(cfg.weatherDriftChance) : 20}" /></div>
+        </div>
+        <label class="wc-toggle-row"><span>Let weather drift one rung per turn</span><input type="checkbox" data-cfg="weatherDrift" ${cfg.weatherDrift !== false ? "checked" : ""} /></label>
+        <div class="wc-field"><label>Weather ladder (comma-separated, calm \u2192 severe)</label><input class="wc-input" id="wc-cfg-weatherladder" value="${esc(cfg.weatherLadder || "Clear, Windy, Overcast, Fog, Rain, Storm, Snow")}" /></div>
+        <div class="wc-dim" style="margin:-4px 0 6px">Phase words only \u2014 day rolls over at midnight. Off-ladder (custom) weather text is never touched. Time advances only on synced turns; nothing moves while you edit or read.</div>
+      </div>
+
+      ${d && Array.isArray(d.syncLog) && d.syncLog.length > 0 ? `<div class="wc-card">
+               <div class="wc-card-head"><span class="wc-card-title">Recent Syncs</span><span class="wc-dim">last ${Math.min(8, d.syncLog.length)}</span></div>
+               ${d.spend && d.spend.calls > 0 ? `<div class="wc-dim" style="margin-bottom:6px">Sidecar spend (this chat): <b>${d.spend.calls}</b> call${d.spend.calls === 1 ? "" : "s"} \xB7 \u2248<b>${d.spend.totalTokens}</b> tokens (est. chars\xF74 \u2014 ${d.spend.promptTokens} prompt / ${d.spend.completionTokens} completion)</div>` : ""}
+               <div class="wc-synclog">
+                 ${d.syncLog.slice(-8).reverse().map((e) => `
+                   <div class="wc-synclog-row ${e.ok ? "is-ok" : "is-fail"}">
+                     <span>${new Date(e.ts).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                     <em>${e.ok ? "synced" : esc(e.error || "failed")}${Number.isFinite(e.tokens) ? ` \xB7 \u2248${e.tokens} tok` : ""}</em>
+                   </div>`).join("")}
+               </div>
+             </div>` : ""}
+
+      <div class="wc-card">
+        <div class="wc-card-head"><span class="wc-card-title">Settings (This Profile)</span><span class="wc-dim">share a tuned config</span></div>
+        <div class="wc-actions-row">
+          <button class="wc-btn is-xs" data-act="modal_add" data-kind="export_settings">Export Settings</button>
+          <button class="wc-btn is-xs" data-act="modal_add" data-kind="import_settings">Import Settings\u2026</button>
+        </div>
       </div>
 
       ${d ? `<div class="wc-card">
@@ -2617,19 +3587,47 @@ function setup(ctx) {
                <div class="wc-actions-row" style="justify-content:space-between;">
                  <div class="wc-actions-row">
                    <button class="wc-btn is-xs" data-act="modal_add" data-kind="export">Export JSON</button>
+                   <button class="wc-btn is-xs" data-act="modal_add" data-kind="export_weft" title="Copy the state as a Weft preset &lt;Status&gt;/&lt;World_State&gt; block for hand-off">Export Weft Block</button>
                    <button class="wc-btn is-xs" data-act="modal_add" data-kind="import">Import JSON</button>
+                   <button class="wc-btn is-xs" data-act="chat_log_report" title="Scan this chat's history for preset &lt;Status&gt;/&lt;World_State&gt; blocks and migrate them into the extension (no LLM, no tokens)">Import from Chat Log\u2026</button>
+                   <button class="wc-btn is-xs" data-act="list_backups">Restore backup\u2026</button>
                  </div>
                  <button class="wc-btn is-xs is-danger" data-act="reset_chat">Reset Chat</button>
                </div>
              </div>` : ""}
     `;
   }
+  function captureViewState(root) {
+    if (!root) return null;
+    const active = root.contains(document.activeElement) ? document.activeElement : null;
+    const focusKey = active ? active.dataset?.act ? `act:${active.dataset.act}` : active.dataset?.cfg ? `cfg:${active.dataset.cfg}` : active.dataset?.subtab ? `subtab:${active.dataset.subtab}` : active.id ? `id:${active.id}` : null : null;
+    return { scrollTop: root.scrollTop, focusKey };
+  }
+  function restoreViewState(root, vs) {
+    if (!root || !vs) return;
+    if (typeof vs.scrollTop === "number") root.scrollTop = vs.scrollTop;
+    if (vs.focusKey) {
+      const [kind, val] = vs.focusKey.split(":", 2);
+      const sel = kind === "act" ? `[data-act="${CSS.escape(val)}"]` : kind === "cfg" ? `[data-cfg="${CSS.escape(val)}"]` : kind === "subtab" ? `[data-subtab="${CSS.escape(val)}"]` : `#${CSS.escape(val)}`;
+      const el = root.querySelector(sel);
+      if (el && typeof el.focus === "function") {
+        try {
+          el.focus({ preventScroll: true });
+        } catch {
+          el.focus();
+        }
+      }
+    }
+  }
   function renderAll() {
     updateChromeState();
-    const theme = settings?.theme || "sakura";
+    const theme = data && data.themeOverride || settings?.theme || "sakura";
+    const settingsViewState = captureViewState(settingsTabHandle?.root || null);
     if (settingsTabHandle && settings) {
       settingsTabHandle.root.innerHTML = `<div class="wc-root" data-wc-theme="${esc(theme)}">${renderSettingsContent(data, settings)}</div>`;
+      restoreViewState(settingsTabHandle.root, settingsViewState);
     }
+    const drawerViewState = captureViewState(drawerTab.root);
     if (!chatId || !data || !settings) {
       drawerTab.root.innerHTML = `
         <div class="wc-root" data-wc-theme="${esc(theme)}">
@@ -2641,11 +3639,20 @@ function setup(ctx) {
           ${settings ? renderSettingsContent(null, settings) : ""}
         </div>
       `;
+      restoreViewState(drawerTab.root, drawerViewState);
       scheduleInlineSync(60);
       return;
     }
     const pendingRolls = data.modules.dice ? data.rolls.filter((r) => !r.consumed).length : 0;
-    const body = activeSubTab === "system" ? renderSystemTab(data, settings) : activeSubTab === "gear" ? renderGearTab(data, settings) : activeSubTab === "tracker" ? renderTrackerTab(data, settings) : activeSubTab === "dice" ? renderDiceTab(data, settings) : renderSettingsContent(data, settings);
+    const latestChoices = findLatestChoices(data);
+    const unclaimedChoices = latestChoices ? Math.max(0, latestChoices.snap.choices.options.length - (latestChoices.snap.choices.claimed?.length || 0)) : 0;
+    const viewCfg = data?.themeOverride ? { ...settings, theme: data.themeOverride } : settings;
+    const body = activeSubTab === "system" ? renderSystemTab(data, viewCfg) : activeSubTab === "gear" ? renderGearTab(data, viewCfg) : activeSubTab === "tracker" ? renderTrackerTab(data, viewCfg) : activeSubTab === "dice" ? renderDiceTab(data, viewCfg) : activeSubTab === "choices" ? renderChoicesTab(data, viewCfg) : renderSettingsContent(data, settings);
+    const syncLog = Array.isArray(data.syncLog) ? data.syncLog : [];
+    const lastSync = syncLog.length > 0 ? syncLog[syncLog.length - 1] : null;
+    const syncErr = typeof data.lastSyncError === "string" && data.lastSyncError ? data.lastSyncError : null;
+    const syncTime = lastSync ? new Date(lastSync.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+    const subLine = syncing ? esc(statusNote || "Syncing\u2026") : syncErr ? `Sync failed \u2014 ${esc(syncErr)}` : lastSync ? `Synced ${esc(syncTime)}${lastSync.ok ? "" : " (with warnings)"}` : data.enabled ? esc(statusNote || "Active in this chat") : "Paused for this chat";
     drawerTab.root.innerHTML = `
       <div class="wc-root" data-wc-theme="${esc(theme)}">
         <div class="wc-topbar">
@@ -2653,27 +3660,29 @@ function setup(ctx) {
             <span class="wc-brand-dot" style="opacity:${data.enabled ? "1" : "0.3"}"></span>
             <div>
               <div class="wc-brand-title">Weft Chronicle</div>
-              <div class="wc-brand-sub">${syncing ? esc(statusNote || "Syncing\u2026") : data.enabled ? esc(statusNote || "Active in this chat") : "Paused for this chat"}</div>
+              <div class="wc-brand-sub${syncErr ? " is-bad" : ""}">${subLine}</div>
             </div>
           </div>
           <div class="wc-actions-row">
             <button class="wc-btn is-xs" data-act="toggle_chat" title="Pause or resume all modules for this chat">${data.enabled ? "On" : "Off"}</button>
-            <button class="wc-btn is-xs is-primary" data-act="sync_now" ${syncing || !data.enabled ? "disabled" : ""}>${syncing ? "\u2026" : "Sync"}</button>
-            ${data.modules.dice ? `<button class="wc-btn is-xs" data-act="quick_roll" title="Roll Fair d20">\u{1F3B2}</button>` : ""}
+            <button class="wc-btn is-xs ${syncErr ? "is-danger" : "is-primary"}" data-act="sync_now" ${syncing || !data.enabled ? "disabled" : ""} title="${syncErr ? "Retry the failed sync" : "Sync state from the latest reply"}">${syncing ? "\u2026" : syncErr ? "Retry" : "Sync"}</button>
+            ${data.modules.dice ? `<button class="wc-btn is-xs" data-act="quick_roll" title="Roll Fair d20" aria-label="Roll Fair d20">${icon("d20", 15)}</button>` : ""}
           </div>
         </div>
 
-        <div class="wc-tabs">
-          <button class="wc-tab ${activeSubTab === "system" ? "is-active" : ""} ${!data.modules.system ? "is-off" : ""}" data-subtab="system">System${data.modules.system && data.sheet.pts > 0 ? ` <span class="wc-pill">+${data.sheet.pts}</span>` : ""}</button>
-          <button class="wc-tab ${activeSubTab === "gear" ? "is-active" : ""} ${!data.modules.system ? "is-off" : ""}" data-subtab="gear">Gear</button>
-          <button class="wc-tab ${activeSubTab === "tracker" ? "is-active" : ""} ${!data.modules.tracker ? "is-off" : ""}" data-subtab="tracker">Tracker</button>
-          <button class="wc-tab ${activeSubTab === "dice" ? "is-active" : ""} ${!data.modules.dice ? "is-off" : ""}" data-subtab="dice">Dice${pendingRolls > 0 ? ` <span class="wc-pill">${pendingRolls}</span>` : ""}</button>
-          <button class="wc-tab ${activeSubTab === "settings" ? "is-active" : ""}" data-subtab="settings" title="Settings">\u2699\uFE0F</button>
+        <div class="wc-tabs" aria-label="Weft Chronicle sections">
+          <button class="wc-tab ${activeSubTab === "system" ? "is-active" : ""} ${!data.modules.system ? "is-off" : ""}" data-subtab="system"system"}">${icon("system", 14)}<span>System</span>${data.modules.system && data.sheet.pts > 0 ? ` <span class="wc-pill">+${data.sheet.pts}</span>` : ""}</button>
+          <button class="wc-tab ${activeSubTab === "gear" ? "is-active" : ""} ${!data.modules.system ? "is-off" : ""}" data-subtab="gear"gear"}">${icon("shield", 14)}<span>Gear</span></button>
+          <button class="wc-tab ${activeSubTab === "tracker" ? "is-active" : ""} ${!data.modules.tracker ? "is-off" : ""}" data-subtab="tracker"tracker"}">${icon("map", 14)}<span>Tracker</span></button>
+          <button class="wc-tab ${activeSubTab === "dice" ? "is-active" : ""} ${!data.modules.dice ? "is-off" : ""}" data-subtab="dice"dice"}">${icon("d20", 14)}<span>Dice</span>${pendingRolls > 0 ? ` <span class="wc-pill">${pendingRolls}</span>` : ""}</button>
+          <button class="wc-tab ${activeSubTab === "choices" ? "is-active" : ""} ${!data.modules.choices ? "is-off" : ""}" data-subtab="choices"choices"}" title="What Now? \u2014 choices from the latest reply">${icon("chat", 14)}<span>Pick</span>${unclaimedChoices > 0 ? ` <span class="wc-pill">${unclaimedChoices}</span>` : ""}</button>
+          <button class="wc-tab wc-tab-icon ${activeSubTab === "settings" ? "is-active" : ""}" data-subtab="settings"settings"}" title="Settings" aria-label="Settings">${icon("cog", 16)}</button>
         </div>
 
         ${body}
       </div>
     `;
+    restoreViewState(drawerTab.root, drawerViewState);
     scheduleInlineSync(80);
   }
   const handleClick = async (ev) => {
@@ -2703,6 +3712,10 @@ function setup(ctx) {
       }
       case "sync_now": {
         send("sync_now");
+        return;
+      }
+      case "list_backups": {
+        send("list_backups");
         return;
       }
       case "init_ai": {
@@ -2739,6 +3752,24 @@ function setup(ctx) {
       }
       case "auto_alloc": {
         send("auto_allocate");
+        return;
+      }
+      case "notice_filter": {
+        noticeFilter = target.dataset.filter || "all";
+        renderAll();
+        return;
+      }
+      case "dismiss_notice": {
+        send("dismiss_notice", { ids: target.dataset.ids || target.dataset.id || "" });
+        return;
+      }
+      case "edge": {
+        rollDraft.mode = target.dataset.mode === "adv" || target.dataset.mode === "dis" ? target.dataset.mode : "normal";
+        renderAll();
+        return;
+      }
+      case "choice_pick": {
+        void pickChoice(target.dataset.key, Number(target.dataset.idx), target);
         return;
       }
       case "rm_effect": {
@@ -2842,16 +3873,40 @@ function setup(ctx) {
         if (inp) inp.value = String(rollDraft.dc);
         return;
       }
-      case "inline_roll": {
+      case "inline_roll":
+      case "inline_contest": {
         const action = drawerTab.root.querySelector("#wc-d-action")?.value.trim() || "Attempt check";
         const stat = drawerTab.root.querySelector("#wc-d-stat")?.value || "none";
         const dc = Number(drawerTab.root.querySelector("#wc-d-dc")?.value || 15);
         const gearBonus = Number(drawerTab.root.querySelector("#wc-d-gear")?.value || 0);
+        const skillId = drawerTab.root.querySelector("#wc-d-skill")?.value || "";
+        const skill = (data?.sheet?.skills || []).find((sk) => sk.id === skillId);
+        const skillBonus = skill ? Number(skill.bonus) || 0 : 0;
         rollDraft.action = action;
         rollDraft.stat = stat;
         rollDraft.dc = dc;
         rollDraft.gearBonus = gearBonus;
-        send("roll_dice", { action, stat, dc, gearBonus });
+        const payload = { action, stat, dc, gearBonus, skillBonus, skillLabel: skill ? skill.name : "", mode: rollDraft.mode };
+        if (target.dataset.act === "inline_contest") {
+          const opponent = drawerTab.root.querySelector("#wc-d-opp")?.value || "";
+          if (!opponent) return;
+          const foeBonus = Number(drawerTab.root.querySelector("#wc-d-foebonus")?.value || 3);
+          send("contest_roll", { ...payload, opponent, foeBonus });
+          return;
+        }
+        send("roll_dice", payload);
+        return;
+      }
+      case "scavenge_roll": {
+        send("scavenge_roll");
+        return;
+      }
+      case "encounter_roll": {
+        send("encounter_roll");
+        return;
+      }
+      case "chat_log_report": {
+        send("chat_log_report");
         return;
       }
       case "clear_pending": {
@@ -2860,6 +3915,16 @@ function setup(ctx) {
       }
       case "clear_rolls": {
         send("clear_roll_history");
+        return;
+      }
+      case "copy_last_roll": {
+        const latest = data && Array.isArray(data.rolls) && data.rolls.length > 0 ? data.rolls[data.rolls.length - 1] : null;
+        if (latest) {
+          try {
+            navigator.clipboard?.writeText(formatRollForChat(latest));
+          } catch {
+          }
+        }
         return;
       }
       case "req_perms": {
@@ -2910,6 +3975,10 @@ function setup(ctx) {
       send("update_settings", { patch: { theme: el.value } });
       return;
     }
+    if (el.id === "wc-cfg-chattheme") {
+      send("set_chat_theme", { theme: el.value || null });
+      return;
+    }
     if (el.id === "wc-cfg-systheme") {
       send("update_settings", { patch: { systemTheme: el.value } });
       return;
@@ -2918,8 +3987,52 @@ function setup(ctx) {
       send("update_settings", { patch: { allocMode: el.value } });
       return;
     }
+    if (el.id === "wc-cfg-allocpriority") {
+      send("update_settings", { patch: { allocPriority: el.value } });
+      return;
+    }
     if (el.id === "wc-cfg-placement") {
       send("update_settings", { patch: { inlinePlacement: el.value } });
+      return;
+    }
+    if (el.id === "wc-cfg-syncmode") {
+      send("update_settings", { patch: { syncMode: el.value } });
+      return;
+    }
+    if (el.id === "wc-cfg-budget") {
+      send("update_settings", { patch: { promptBudget: el.value } });
+      return;
+    }
+    if (el.id === "wc-cfg-xpcurve") {
+      send("update_settings", { patch: { xpCurve: el.value } });
+      return;
+    }
+    if (el.id === "wc-cfg-heatdisplay") {
+      send("update_settings", { patch: { heatDisplay: el.value } });
+      return;
+    }
+    if (el.id === "wc-cfg-survivaldc") {
+      send("update_settings", { patch: { survivalDc: Number(el.value || 15) } });
+      return;
+    }
+    if (el.id === "wc-cfg-survtable") {
+      send("update_settings", { patch: { survivalTable: el.value } });
+      return;
+    }
+    if (el.id === "wc-cfg-survcustom") {
+      send("update_settings", { patch: { survivalCustomTable: el.value } });
+      return;
+    }
+    if (el.id === "wc-cfg-clockstep") {
+      send("update_settings", { patch: { clockStepMinutes: Number(el.value || 45) } });
+      return;
+    }
+    if (el.id === "wc-cfg-weatherchance") {
+      send("update_settings", { patch: { weatherDriftChance: Number(el.value || 0) } });
+      return;
+    }
+    if (el.id === "wc-cfg-weatherladder") {
+      send("update_settings", { patch: { weatherLadder: el.value } });
       return;
     }
     if (el.id === "wc-d-action") rollDraft.action = el.value;
@@ -2965,7 +4078,10 @@ function setup(ctx) {
         permissions = msg.permissions;
         syncing = msg.syncing;
         statusNote = msg.statusNote || "";
+        promptEstimate = msg.promptEstimate && typeof msg.promptEstimate === "object" ? msg.promptEstimate : null;
         renderAll();
+        if (Array.isArray(msg.backupList)) openBackupModal(msg.backupList);
+        if (msg.chatLogReport && typeof msg.chatLogReport === "object") openChatLogModal(msg.chatLogReport);
         void hydrateFrontendConnections();
       }
     })
