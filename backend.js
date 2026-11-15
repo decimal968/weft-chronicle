@@ -90,6 +90,7 @@ function createDefaultSettings() {
     showInlineNotices: true,
     showInlineDice: true,
     inlineStartsOpen: false,
+    inlinePlacement: "inside",
     trackerShowBond: true,
     trackerShowSpark: true,
     trackerShowHeat: true,

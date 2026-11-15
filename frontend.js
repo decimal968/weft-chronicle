@@ -1067,12 +1067,22 @@ var WEFT_CHRONICLE_CSS = `
 .wc-dice-dc { padding-left: 6px; margin-left: 4px; border-left: 1px solid rgba(127,127,127,0.35); }
 
 /* ---- Inline Chat Bubble Container ---- */
+[data-spindle-injected]:has(> .wc-inline-wrap) {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
 .wc-inline-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
-  max-width: 660px;
+  gap: 7px;
+  margin: 4px 0 6px;
+  width: 100%;
+  max-width: 100%;
+}
+.wc-inline-wrap.is-below {
+  margin: 6px 0 2px;
 }
 
 /* ---- Gear, Quests, Chips & Modals ---- */
@@ -1222,20 +1232,128 @@ function setup(ctx) {
     }
   }
   function clearAllInlineCards() {
-    for (const el of injectedWrappers.values()) {
+    for (const entry of injectedWrappers.values()) {
       try {
-        ctx.dom.uninject(el);
+        ctx.dom.uninject(entry.wrapper);
       } catch {
       }
     }
     injectedWrappers.clear();
   }
   function findSnapshotForMessage(d, messageId) {
+    if (d.lastSyncedKey && d.lastSyncedKey.startsWith(`${messageId}:`)) {
+      const activeSnap = d.snapshots[d.lastSyncedKey];
+      if (activeSnap) return activeSnap;
+    }
     const matching = Object.values(d.snapshots || {}).filter((s) => s.messageId === messageId).sort((a, b) => b.timestamp - a.timestamp);
     if (matching.length > 0) return matching[0];
     return null;
   }
-  function buildInlineHtml(d, cfg, snap) {
+  function isInsideOurInjection(el) {
+    return Boolean(el.closest(".wc-inline-wrap"));
+  }
+  function readHorizontalPadding(el) {
+    if (!el) return null;
+    try {
+      const cs = window.getComputedStyle(el);
+      const pl = parseFloat(cs.paddingLeft) || 0;
+      const pr = parseFloat(cs.paddingRight) || 0;
+      if (pl >= 6 || pr >= 6) {
+        return { left: cs.paddingLeft, right: cs.paddingRight };
+      }
+    } catch {
+    }
+    return null;
+  }
+  function isHorizontalFlex(el) {
+    if (!el) return false;
+    try {
+      const cs = window.getComputedStyle(el);
+      return (cs.display === "flex" || cs.display === "inline-flex") && cs.flexDirection.startsWith("row");
+    } catch {
+      return false;
+    }
+  }
+  function resolveInlineTarget(bubbleEl, placement) {
+    if (placement === "below") {
+      return { target: bubbleEl, position: "beforeend", padX: null };
+    }
+    const bodyAfter = bubbleEl.querySelector('[data-spindle-mount="message_body_after"]');
+    if (bodyAfter) {
+      const ownPad = readHorizontalPadding(bodyAfter);
+      const sibPad = !ownPad ? readHorizontalPadding(bodyAfter.previousElementSibling) : null;
+      return { target: bodyAfter, position: "beforeend", padX: sibPad };
+    }
+    const contentSelectors = [
+      "[data-message-content]",
+      '[data-testid="message-content"]',
+      '[data-testid*="message-body"]',
+      ".lumiverse-message-content",
+      ".message-content",
+      ".markdown-body",
+      ".prose"
+    ];
+    let contentEl = null;
+    for (const sel of contentSelectors) {
+      const match = Array.from(bubbleEl.querySelectorAll(sel)).find((el) => !isInsideOurInjection(el));
+      if (match) {
+        contentEl = match;
+        break;
+      }
+    }
+    if (contentEl && contentEl !== bubbleEl) {
+      const parent = contentEl.parentElement;
+      if (parent && bubbleEl.contains(parent) && !isHorizontalFlex(parent)) {
+        return {
+          target: contentEl,
+          position: "afterend",
+          padX: readHorizontalPadding(contentEl)
+        };
+      }
+      return { target: contentEl, position: "beforeend", padX: null };
+    }
+    const allDescendants = Array.from(bubbleEl.querySelectorAll("*"));
+    const islands = allDescendants.filter(
+      (el) => Boolean(el.shadowRoot) && !isInsideOurInjection(el)
+    );
+    const paragraphs = Array.from(bubbleEl.querySelectorAll("p")).filter(
+      (p) => !isInsideOurInjection(p) && !p.closest("details, blockquote, [data-spindle-mount]")
+    );
+    const lastIsland = islands[islands.length - 1] || null;
+    const lastP = paragraphs[paragraphs.length - 1] || null;
+    if (lastIsland && (!lastP || Boolean(lastP.compareDocumentPosition(lastIsland) & Node.DOCUMENT_POSITION_FOLLOWING))) {
+      let anchor = lastIsland;
+      while (anchor.parentElement && anchor.parentElement !== bubbleEl && anchor.parentElement.children.length === 1) {
+        anchor = anchor.parentElement;
+      }
+      if (!isHorizontalFlex(anchor.parentElement)) {
+        return { target: anchor, position: "afterend", padX: readHorizontalPadding(anchor) };
+      }
+    }
+    if (lastP && lastP.parentElement && bubbleEl.contains(lastP.parentElement)) {
+      const pParent = lastP.parentElement;
+      if (pParent !== bubbleEl && !isHorizontalFlex(pParent.parentElement)) {
+        return {
+          target: pParent,
+          position: "afterend",
+          padX: readHorizontalPadding(pParent)
+        };
+      }
+      return { target: pParent, position: "beforeend", padX: null };
+    }
+    const footer = bubbleEl.querySelector(
+      '[data-spindle-mount="message_footer"], [data-spindle-mount="message_swipe_indicators"]'
+    );
+    if (footer && footer.parentElement && bubbleEl.contains(footer.parentElement)) {
+      return {
+        target: footer,
+        position: "beforebegin",
+        padX: readHorizontalPadding(footer)
+      };
+    }
+    return { target: bubbleEl, position: "beforeend", padX: null };
+  }
+  function buildInlineHtml(d, cfg, snap, padX) {
     const parts = [];
     const sysTh = resolveSystemTheme(cfg);
     if (d.modules.dice && cfg.showInlineDice && Array.isArray(snap.rolls) && snap.rolls.length > 0) {
@@ -1255,7 +1373,9 @@ function setup(ctx) {
       parts.push(renderTrackerCard(snap.world, cfg, { mode: "inline", open: cfg.inlineStartsOpen }));
     }
     if (parts.length === 0) return "";
-    return `<div class="wc-inline-wrap" data-wc-theme="${esc(cfg.theme)}">${parts.join("")}</div>`;
+    const belowCls = cfg.inlinePlacement === "below" ? " is-below" : "";
+    const padStyle = padX ? ` style="padding-left:${esc(padX.left)};padding-right:${esc(padX.right)};"` : "";
+    return `<div class="wc-inline-wrap${belowCls}" data-wc-theme="${esc(cfg.theme)}"${padStyle}>${parts.join("")}</div>`;
   }
   function syncInlineChatCards() {
     if (!data || !settings || !data.enabled || !data.initialized) {
@@ -1270,6 +1390,7 @@ function setup(ctx) {
     const activeIds = /* @__PURE__ */ new Set();
     const latestSnapKey = data.lastSyncedKey;
     const latestSnap = latestSnapKey ? data.snapshots[latestSnapKey] : null;
+    const placement = settings.inlinePlacement === "below" ? "below" : "inside";
     let mounted = [];
     try {
       mounted = ctx.dom.listMessageElements();
@@ -1280,20 +1401,29 @@ function setup(ctx) {
       const snap = findSnapshotForMessage(data, item.messageId);
       if (!snap) continue;
       const effectiveSnap = latestSnap && snap.messageId === latestSnap.messageId ? { ...snap, sheet: data.sheet, world: data.world } : snap;
-      const html = buildInlineHtml(data, settings, effectiveSnap);
+      const resolved = resolveInlineTarget(item.element, placement);
+      const html = buildInlineHtml(data, settings, effectiveSnap, resolved.padX);
       if (!html) continue;
       activeIds.add(item.messageId);
       const existing = injectedWrappers.get(item.messageId);
-      if (existing) {
-        const prevOpenStates = Array.from(existing.querySelectorAll("details")).map((el) => el.open);
-        existing.innerHTML = html;
-        const nextDetails = Array.from(existing.querySelectorAll("details"));
+      const needsReinject = !existing || !existing.wrapper.isConnected || existing.target !== resolved.target || existing.position !== resolved.position;
+      if (existing && !needsReinject) {
+        const prevOpenStates = Array.from(existing.wrapper.querySelectorAll("details")).map((el) => el.open);
+        existing.wrapper.innerHTML = html;
+        const nextDetails = Array.from(existing.wrapper.querySelectorAll("details"));
         nextDetails.forEach((el, idx) => {
           if (typeof prevOpenStates[idx] === "boolean") el.open = prevOpenStates[idx];
         });
       } else {
+        if (existing) {
+          try {
+            ctx.dom.uninject(existing.wrapper);
+          } catch {
+          }
+          injectedWrappers.delete(item.messageId);
+        }
         try {
-          const wrapper = ctx.dom.inject(item.element, html, "beforeend");
+          const wrapper = ctx.dom.inject(resolved.target, html, resolved.position);
           wrapper.addEventListener("click", (ev) => {
             const btn = ev.target?.closest("[data-act]");
             if (!btn) return;
@@ -1304,15 +1434,19 @@ function setup(ctx) {
               send("auto_allocate");
             }
           });
-          injectedWrappers.set(item.messageId, wrapper);
+          injectedWrappers.set(item.messageId, {
+            wrapper,
+            target: resolved.target,
+            position: resolved.position
+          });
         } catch {
         }
       }
     }
-    for (const [mid, el] of injectedWrappers.entries()) {
+    for (const [mid, entry] of injectedWrappers.entries()) {
       if (!activeIds.has(mid) && !findSnapshotForMessage(data, mid)) {
         try {
-          ctx.dom.uninject(el);
+          ctx.dom.uninject(entry.wrapper);
         } catch {
         }
         injectedWrappers.delete(mid);
@@ -1320,15 +1454,22 @@ function setup(ctx) {
     }
   }
   let inlineTimer = null;
+  let inlineSettleTimer = null;
   function scheduleInlineSync(delay = 120) {
     if (inlineTimer) clearTimeout(inlineTimer);
+    if (inlineSettleTimer) clearTimeout(inlineSettleTimer);
     inlineTimer = setTimeout(() => {
       inlineTimer = null;
       syncInlineChatCards();
+      inlineSettleTimer = setTimeout(() => {
+        inlineSettleTimer = null;
+        syncInlineChatCards();
+      }, 420);
     }, delay);
   }
   cleanups.push(() => {
     if (inlineTimer) clearTimeout(inlineTimer);
+    if (inlineSettleTimer) clearTimeout(inlineSettleTimer);
     clearAllInlineCards();
   });
   function openQuickRollModal() {
@@ -1999,7 +2140,14 @@ function setup(ctx) {
       <div class="wc-card">
         <div class="wc-card-head">
           <span class="wc-card-title">Inline Cards Inside Chat</span>
-          <span class="wc-dim">Show below AI replies</span>
+          <span class="wc-dim">Rendered with AI replies</span>
+        </div>
+        <div class="wc-field">
+          <label>Card Placement</label>
+          <select class="wc-select" id="wc-cfg-placement">
+            <option value="inside" ${cfg.inlinePlacement !== "below" ? "selected" : ""}>Inside message card (above swipe bar)</option>
+            <option value="below" ${cfg.inlinePlacement === "below" ? "selected" : ""}>Below message card</option>
+          </select>
         </div>
         <label class="wc-toggle-row"><span>Show System Window card in chat</span><input type="checkbox" data-cfg="showInlineSystem" ${cfg.showInlineSystem ? "checked" : ""} /></label>
         <label class="wc-toggle-row"><span>Show System Notifications in chat</span><input type="checkbox" data-cfg="showInlineNotices" ${cfg.showInlineNotices ? "checked" : ""} /></label>
@@ -2351,6 +2499,10 @@ function setup(ctx) {
     }
     if (el.id === "wc-cfg-alloc") {
       send("update_settings", { patch: { allocMode: el.value } });
+      return;
+    }
+    if (el.id === "wc-cfg-placement") {
+      send("update_settings", { patch: { inlinePlacement: el.value } });
       return;
     }
     if (el.id === "wc-d-action") rollDraft.action = el.value;
