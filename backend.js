@@ -851,8 +851,19 @@ var MAX_SNAPSHOTS = 40;
 var settingsCache = /* @__PURE__ */ new Map();
 var chatCache = /* @__PURE__ */ new Map();
 var activeChatByUser = /* @__PURE__ */ new Map();
+var lastUserByChat = /* @__PURE__ */ new Map();
 var syncingChats = /* @__PURE__ */ new Set();
 var interceptorDisposer = null;
+function rememberUserForChat(chatId, userId) {
+  if (chatId && userId && userId.trim()) {
+    lastUserByChat.set(chatId, userId.trim());
+    return userId.trim();
+  }
+  if (chatId) {
+    return lastUserByChat.get(chatId);
+  }
+  return userId;
+}
 function userKey(userId) {
   return userId && userId.trim() ? userId.trim() : "__default__";
 }
@@ -1055,7 +1066,7 @@ async function gatherRecentTranscript(chatId, tailCount = 4) {
     return { transcript: "", tailMessageId: null, tailSwipeId: 0, prevMessageKey: null };
   }
 }
-async function runSidecarLlm(messages, settings) {
+async function runSidecarLlm(messages, settings, userId) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 45e3);
   try {
@@ -1069,6 +1080,9 @@ async function runSidecarLlm(messages, settings) {
       reasoning: { source: "off" },
       signal: controller.signal
     };
+    if (userId) {
+      req.userId = userId;
+    }
     if (settings.sidecarConnectionId) {
       req.connection_id = settings.sidecarConnectionId;
     }
@@ -1078,10 +1092,10 @@ async function runSidecarLlm(messages, settings) {
     clearTimeout(timer);
   }
 }
-async function runAiBootstrap(chatId, userId) {
+async function runAiBootstrap(chatId, rawUserId) {
+  const userId = rememberUserForChat(chatId, rawUserId);
   if (!spindle.permissions.has("generation")) {
     spindle.toast.warning('Grant the "generation" permission to auto-initialize from your chat.', {
-      title: "Weft Chronicle",
       userId
     });
     return;
@@ -1131,11 +1145,10 @@ async function runAiBootstrap(chatId, userId) {
       scenario,
       recentTranscript: transcript
     });
-    const raw = await runSidecarLlm(promptMsgs, settings);
+    const raw = await runSidecarLlm(promptMsgs, settings, userId);
     const delta = parseJsonDelta(raw);
     if (!delta) {
       spindle.toast.warning("Sidecar returned unreadable JSON during init. Try again or pick a stronger sidecar model.", {
-        title: "Weft Chronicle",
         userId
       });
       return;
@@ -1149,13 +1162,11 @@ async function runAiBootstrap(chatId, userId) {
     }
     await saveChatData(data, userId);
     spindle.toast.success(`Initialized ${data.sheet.name} (Lv ${data.sheet.level}) & ${data.world.npcs.length} NPC(s).`, {
-      title: "Weft Chronicle",
       userId
     });
   } catch (err) {
     spindle.log.error(`Bootstrap error: ${String(err)}`);
     spindle.toast.error(`Init failed: ${err instanceof Error ? err.message : String(err)}`, {
-      title: "Weft Chronicle",
       userId
     });
   } finally {
@@ -1163,11 +1174,11 @@ async function runAiBootstrap(chatId, userId) {
     await pushStateToFrontend(chatId, userId);
   }
 }
-async function runDeltaSync(chatId, userId, opts) {
+async function runDeltaSync(chatId, rawUserId, opts) {
+  const userId = rememberUserForChat(chatId, rawUserId);
   if (!spindle.permissions.has("generation")) {
     if (opts?.manual) {
       spindle.toast.warning('Grant the "generation" permission to sync state automatically.', {
-        title: "Weft Chronicle",
         userId
       });
     }
@@ -1193,12 +1204,11 @@ async function runDeltaSync(chatId, userId, opts) {
     const effectiveTranscript = transcript || (opts?.fallbackContent ? `[AI]: ${opts.fallbackContent}` : "");
     if (!effectiveTranscript.trim()) return;
     const promptMsgs = buildDeltaMessages(data, effectiveTranscript);
-    const raw = await runSidecarLlm(promptMsgs, settings);
+    const raw = await runSidecarLlm(promptMsgs, settings, userId);
     const delta = parseJsonDelta(raw);
     if (!delta) {
       if (opts?.manual) {
         spindle.toast.warning("Could not parse state delta JSON from sidecar model.", {
-          title: "Weft Chronicle",
           userId
         });
       }
@@ -1219,16 +1229,15 @@ async function runDeltaSync(chatId, userId, opts) {
     if (outcome.leveledUp) {
       spindle.toast.success(
         `${data.sheet.name} reached Level ${outcome.newLevel}! (+${outcome.ptsGained} stat pts, +25% recovery)`,
-        { title: "LEVEL UP \xB7 Weft Chronicle", duration: 6e3, userId }
+        { title: "LEVEL UP", duration: 6e3, userId }
       );
     } else if (opts?.manual || consumedAny) {
-      spindle.toast.info(outcome.summary, { title: "Weft Chronicle Synced", duration: 3500, userId });
+      spindle.toast.info(outcome.summary, { title: "Synced", duration: 3500, userId });
     }
   } catch (err) {
     spindle.log.error(`Delta sync failed for ${chatId}: ${String(err)}`);
     if (opts?.manual) {
       spindle.toast.error(`Sync failed: ${err instanceof Error ? err.message : String(err)}`, {
-        title: "Weft Chronicle",
         userId
       });
     }
@@ -1249,6 +1258,7 @@ function ensureInterceptorRegistered() {
   interceptorDisposer = spindle.registerInterceptor(
     async (messages, context) => {
       if (!context.chatId) return messages;
+      rememberUserForChat(context.chatId, context.userId);
       if (context.generationType === "quiet" || context.generationType === "impersonate") {
         return messages;
       }
@@ -1280,15 +1290,18 @@ spindle.on("PERMISSION_CHANGED", () => {
     void pushStateToFrontend(chatId, uid === "__default__" ? void 0 : uid);
   }
 });
-spindle.on("CHAT_SWITCHED", async (payload, userId) => {
+spindle.on("CHAT_SWITCHED", async (payload, rawUserId) => {
   const obj = payload || {};
   const chatId = typeof obj.chatId === "string" ? obj.chatId : typeof obj.id === "string" ? obj.id : null;
   if (!chatId) return;
+  const userId = rememberUserForChat(chatId, rawUserId);
   activeChatByUser.set(userKey(userId), chatId);
   await pushStateToFrontend(chatId, userId);
 });
-spindle.on("CHAT_FORKED", async (payload, userId) => {
+spindle.on("CHAT_FORKED", async (payload, rawUserId) => {
   try {
+    const userId = rememberUserForChat(payload.sourceChatId, rawUserId);
+    rememberUserForChat(payload.forkedChatId, userId);
     const src = await loadChatData(payload.sourceChatId, userId);
     const forked = deepClone(src);
     forked.chatId = payload.forkedChatId;
@@ -1302,8 +1315,9 @@ spindle.on("CHAT_FORKED", async (payload, userId) => {
     spindle.log.warn(`CHAT_FORKED state copy failed: ${String(err)}`);
   }
 });
-spindle.on("MESSAGE_SWIPED", async (payload, userId) => {
+spindle.on("MESSAGE_SWIPED", async (payload, rawUserId) => {
   if (!payload?.chatId || !payload.message?.id) return;
+  const userId = rememberUserForChat(payload.chatId, rawUserId);
   if (payload.action === "navigated") {
     const data = await loadChatData(payload.chatId, userId);
     const key = `${payload.message.id}:${payload.swipeId}`;
@@ -1315,10 +1329,11 @@ spindle.on("MESSAGE_SWIPED", async (payload, userId) => {
     }
   }
 });
-spindle.on("MESSAGE_DELETED", async (payload, userId) => {
+spindle.on("MESSAGE_DELETED", async (payload, rawUserId) => {
   const obj = payload || {};
-  const chatId = typeof obj.chatId === "string" ? obj.chatId : activeChatByUser.get(userKey(userId));
+  const chatId = typeof obj.chatId === "string" ? obj.chatId : activeChatByUser.get(userKey(rawUserId));
   if (!chatId) return;
+  const userId = rememberUserForChat(chatId, rawUserId);
   const data = await loadChatData(chatId, userId);
   const { tailMessageId, tailSwipeId } = await gatherRecentTranscript(chatId, 2);
   if (tailMessageId) {
@@ -1329,9 +1344,10 @@ spindle.on("MESSAGE_DELETED", async (payload, userId) => {
     }
   }
 });
-spindle.on("GENERATION_ENDED", async (payload, userId) => {
+spindle.on("GENERATION_ENDED", async (payload, rawUserId) => {
   if (!payload?.chatId || payload.error) return;
   if (payload.generationType === "impersonate" || payload.generationType === "quiet") return;
+  const userId = rememberUserForChat(payload.chatId, rawUserId);
   const settings = await loadSettings(userId);
   const data = await loadChatData(payload.chatId, userId);
   if (!data.enabled) return;
@@ -1365,6 +1381,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
   const activeChatId = reqChatId || activeChatByUser.get(userKey(userId)) || null;
   if (reqChatId) {
     activeChatByUser.set(userKey(userId), reqChatId);
+    rememberUserForChat(reqChatId, userId);
   }
   try {
     switch (type) {
@@ -1472,7 +1489,7 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         await saveChatData(data, userId);
         if (outcome.leveledUp) {
           spindle.toast.success(`LEVEL UP! ${data.sheet.name} is now Lv ${outcome.newLevel} (+${outcome.ptsGained} pts).`, {
-            title: "Weft Chronicle",
+            title: "LEVEL UP",
             userId
           });
         }
@@ -1829,7 +1846,6 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
   } catch (err) {
     spindle.log.error(`RPC ${type} failed: ${String(err)}`);
     spindle.toast.error(`Action failed: ${err instanceof Error ? err.message : String(err)}`, {
-      title: "Weft Chronicle",
       userId
     });
   }
