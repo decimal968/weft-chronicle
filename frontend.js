@@ -138,6 +138,136 @@ function renderDiceCard(r, theme) {
     </div>
   `;
 }
+function renderQuestEntry(q, interactive) {
+  return `
+    <div class="wc-msq" data-s="${esc(q.status)}" data-k="${esc(q.kind)}">
+      <div class="wc-msq-h">
+        <b class="wc-msq-t">${esc(q.title)}</b>
+        <span class="wc-msq-k">${esc(q.kind)}</span>
+        <span class="wc-msq-s">${esc(q.status)}</span>
+      </div>
+      ${q.objectives.length > 0 ? `<div class="wc-msq-objs">
+               ${q.objectives.map(
+    (o) => interactive ? `<button type="button" class="wc-mso is-btn" data-x="${o.done ? "1" : "0"}" data-act="toggle_obj_btn" data-qid="${esc(q.id)}" data-oid="${esc(o.id)}"><span>${esc(o.text)}</span></button>` : `<div class="wc-mso" data-x="${o.done ? "1" : "0"}"><span>${esc(o.text)}</span></div>`
+  ).join("")}
+             </div>` : ""}
+      ${q.reward ? `<div class="wc-msq-rw">${esc(q.reward)}</div>` : ""}
+      ${q.penalty ? `<div class="wc-msq-pn">${esc(q.penalty)}</div>` : ""}
+      ${interactive ? `<div class="wc-msq-acts">
+               <button class="wc-btn is-xs" data-act="cycle_quest_status" data-id="${esc(q.id)}">${q.status === "active" ? "Mark Done" : q.status === "available" ? "Accept" : "Reopen"}</button>
+               <button class="wc-btn is-xs" data-act="edit_quest" data-id="${esc(q.id)}">Edit</button>
+               <button class="wc-btn is-xs" data-act="rm_quest" data-id="${esc(q.id)}">\xD7</button>
+             </div>` : ""}
+    </div>
+  `;
+}
+function renderInventoryWindow(s, settings) {
+  const sysTh = resolveSystemTheme(settings);
+  const maxBonus = computeMaxGearBonus(s);
+  const slots = [
+    { key: "weapon", label: "WEAPON", defaultCat: "weapon" },
+    { key: "armor", label: "ARMOR", defaultCat: "armor" },
+    { key: "accessory", label: "ACCESSORY", defaultCat: "accessory" }
+  ];
+  return `
+    <div class="wc-ms is-open-panel" data-wc-theme="${esc(sysTh)}">
+      <div class="wc-ms-win">
+        <div class="wc-ms-hdr">
+          <div class="wc-ms-ic"><i>\u25C6</i></div>
+          <div class="wc-ms-tt2">INVENTORY</div>
+          <button class="wc-btn is-primary is-xs" data-act="add_item" style="flex:none; height:34px; padding:0 10px;">+ Item</button>
+        </div>
+
+        <div class="wc-ms-sec" style="border-top:none; padding-top:0;">
+          <div class="wc-ms-shd">
+            <span>EQUIPPED GEAR</span>
+            <span class="wc-ms-ptpill">ROLL BONUS +${maxBonus}</span>
+          </div>
+          <div class="wc-ms-eqgrid">
+            ${slots.map(({ key, label, defaultCat }) => {
+    const it = s.gear[key];
+    if (!it) {
+      return `
+                    <div class="wc-ms-eqslot is-empty" data-t="${defaultCat}">
+                      <span class="wc-ms-eqlbl">${label}</span>
+                      <span class="wc-msit-i is-dim"></span>
+                      <span class="wc-ms-eqnm is-empty">Empty</span>
+                    </div>
+                  `;
+    }
+    const rb = typeof it.rollBonus === "number" ? it.rollBonus : rarityRollBonus(it.rarity);
+    return `
+                  <div class="wc-ms-eqslot" data-t="${esc(it.category)}" data-r="${esc(it.rarity)}" title="${esc(it.note || it.name)}">
+                    <span class="wc-ms-eqlbl">${label}</span>
+                    ${rb > 0 ? `<span class="wc-ms-eqbon">+${rb}</span>` : ""}
+                    <span class="wc-msit-i"></span>
+                    <span class="wc-ms-eqnm">${esc(it.name)}</span>
+                    <button class="wc-ms-eqbtn" data-act="unequip" data-slot="${key}">Unequip</button>
+                  </div>
+                `;
+  }).join("")}
+          </div>
+        </div>
+
+        <div class="wc-ms-sec">
+          <div class="wc-ms-shd">
+            <span>PACK (${s.bag.length} / 24)</span>
+            <span class="wc-ms-sublbl">TAP TILE TO INSPECT</span>
+          </div>
+          ${s.bag.length > 0 ? `<div class="wc-ms-grid">
+                   ${s.bag.map((it) => {
+    const canEquip = it.category === "weapon" || it.category === "armor" || it.category === "accessory";
+    return `
+                         <div class="wc-msit" data-t="${esc(it.category)}" data-r="${esc(it.rarity)}" title="${esc(it.note || it.name)}">
+                           ${it.qty > 1 ? `<span class="wc-msit-c">${it.qty}</span>` : ""}
+                           <button type="button" class="wc-msit-hit" data-act="edit_item" data-id="${esc(it.id)}">
+                             <span class="wc-msit-i"></span>
+                             <span class="wc-msit-n">${esc(it.name)}</span>
+                           </button>
+                           <div class="wc-msit-bar">
+                             ${canEquip ? `<button type="button" class="wc-msit-act is-eq" data-act="equip" data-id="${esc(it.id)}">Equip</button>` : ""}
+                             <button type="button" class="wc-msit-act" data-act="rm_item" data-id="${esc(it.id)}">\u22121</button>
+                           </div>
+                         </div>
+                       `;
+  }).join("")}
+                 </div>` : `<div class="wc-ms-empty">Your pack is empty. Tap <strong>+ Item</strong> or sync after looting.</div>`}
+        </div>
+
+        <div class="wc-ms-cash">
+          <span class="wc-ms-cash-k">FUNDS</span>
+          <span class="wc-ms-cash-v">${esc(s.cash || "None recorded")}</span>
+          <button class="wc-btn is-xs" data-act="edit_identity">Edit</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+function renderQuestWindow(s, settings) {
+  const sysTh = resolveSystemTheme(settings);
+  const activeCount = s.quests.filter((q) => q.status === "active").length;
+  const availCount = s.quests.filter((q) => q.status === "available").length;
+  return `
+    <div class="wc-ms is-open-panel" data-wc-theme="${esc(sysTh)}">
+      <div class="wc-ms-win">
+        <div class="wc-ms-hdr">
+          <div class="wc-ms-ic"><i>\u2726</i></div>
+          <div class="wc-ms-tt2">QUEST INFO</div>
+          <button class="wc-btn is-primary is-xs" data-act="add_quest" style="flex:none; height:34px; padding:0 10px;">+ Quest</button>
+        </div>
+
+        <div class="wc-ms-shd">
+          <span>ACTIVE: ${activeCount}${availCount ? ` \xB7 AVAILABLE: ${availCount}` : ""}</span>
+          <span class="wc-ms-sublbl">${s.quests.length} / 8 LOGGED</span>
+        </div>
+
+        ${s.quests.length > 0 ? `<div class="wc-msq-list">
+                 ${s.quests.map((q) => renderQuestEntry(q, true)).join("")}
+               </div>` : `<div class="wc-ms-empty">No quests tracked yet. Tap <strong>+ Quest</strong> or sync your story.</div>`}
+      </div>
+    </div>
+  `;
+}
 function renderSystemWindow(s, settings, opts) {
   const sysTh = resolveSystemTheme(settings);
   const hpPct = pct(s.hp, s.hpMax);
@@ -248,16 +378,16 @@ function renderSystemWindow(s, settings, opts) {
       </div>
 
       ${!isDrawer && (s.gear.weapon || s.gear.armor || s.gear.accessory || s.bag.length > 0) ? `<div class="wc-ms-sec">
-               <div class="wc-ms-shd"><span>GEAR & BAG</span><span class="wc-ms-sublbl">Bonus +${computeMaxGearBonus(s)}${s.cash ? ` \xB7 ${esc(s.cash)}` : ""}</span></div>
+               <div class="wc-ms-shd"><span>EQUIPMENT & PACK</span><span class="wc-ms-sublbl">Bonus +${computeMaxGearBonus(s)}${s.cash ? ` \xB7 ${esc(s.cash)}` : ""}</span></div>
                <div class="wc-ms-chips">
                  ${["weapon", "armor", "accessory"].map((slot) => {
     const it = s.gear[slot];
     if (!it) return "";
     const rb = typeof it.rollBonus === "number" ? it.rollBonus : rarityRollBonus(it.rarity);
-    return `<span class="wc-ms-chip wc-rarity-${esc(it.rarity)}">${slot[0].toUpperCase()}: ${esc(it.name)}${rb > 0 ? ` +${rb}` : ""}</span>`;
+    return `<span class="wc-msi" data-r="${esc(it.rarity)}"><b>${slot[0].toUpperCase()}: ${esc(it.name)}</b>${rb > 0 ? `<em>+${rb}</em>` : ""}</span>`;
   }).join("")}
                  ${s.bag.slice(0, 6).map(
-    (it) => `<span class="wc-ms-chip">${esc(it.name)}${it.qty > 1 ? ` \xD7${it.qty}` : ""}</span>`
+    (it) => `<span class="wc-msi" data-r="${esc(it.rarity)}"><b>${esc(it.name)}${it.qty > 1 ? ` \xD7${it.qty}` : ""}</b></span>`
   ).join("")}
                </div>
              </div>` : ""}
@@ -290,13 +420,8 @@ function renderSystemWindow(s, settings, opts) {
 
       ${!isDrawer && s.quests.some((q) => q.status === "active" || q.status === "available") ? `<div class="wc-ms-sec">
                <div class="wc-ms-shd"><span>ACTIVE QUESTS</span></div>
-               <div class="wc-ms-qlist">
-                 ${s.quests.filter((q) => q.status === "active" || q.status === "available").slice(0, 3).map(
-    (q) => `<div class="wc-ms-qrow">
-                          <strong>${esc(q.title)}</strong>
-                          ${q.objectives.map((o) => `<div class="wc-ms-qobj ${o.done ? "is-done" : ""}">${o.done ? "\u2611" : "\u2610"} ${esc(o.text)}</div>`).join("")}
-                        </div>`
-  ).join("")}
+               <div class="wc-msq-list">
+                 ${s.quests.filter((q) => q.status === "active" || q.status === "available").slice(0, 3).map((q) => renderQuestEntry(q, false)).join("")}
                </div>
              </div>` : ""}
     </div>
@@ -864,6 +989,331 @@ var WEFT_CHRONICLE_CSS = `
 .wc-ms-qobj.is-done { text-decoration: line-through; opacity: 0.6; }
 
 /* ============================================================================
+   1B. AUTHENTIC WEFT HOLOGRAPHIC INVENTORY GRID & QUEST INFO WINDOW
+   ============================================================================ */
+.wc-ms-hdr {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wc-ms-ic {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(var(--pr), 0.48);
+  background: rgba(var(--pr), 0.09);
+}
+.wc-ms-ic i {
+  width: 21px;
+  height: 21px;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--tx);
+  border-radius: 50%;
+  font: 700 12px/1 system-ui;
+  font-style: normal;
+  text-shadow: 0 0 8px var(--a);
+}
+.wc-ms-tt2 {
+  flex: 1;
+  height: 34px;
+  border-radius: 5px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(var(--pr), 0.48);
+  background: rgba(var(--pr), 0.06);
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  text-shadow: 0 0 10px var(--a);
+}
+
+.wc-ms-eqgrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 7px;
+}
+.wc-ms-eqslot {
+  --rc: rgba(var(--pr), 0.48);
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 5px 6px;
+  border-radius: 4px 11px 4px 11px;
+  border: 1px solid var(--rc);
+  background: linear-gradient(160deg, rgba(var(--pr), 0.16), rgba(var(--pr), 0.04));
+  box-shadow: 0 0 10px -4px var(--rc), inset 0 0 10px -5px var(--rc);
+  text-align: center;
+}
+.wc-ms-eqslot.is-empty {
+  border-style: dashed;
+  border-color: rgba(var(--pr), 0.28);
+  background: rgba(var(--pr), 0.03);
+  box-shadow: none;
+}
+.wc-ms-eqlbl {
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--dim);
+}
+.wc-ms-eqbon {
+  position: absolute;
+  top: 3px;
+  right: 5px;
+  font-size: 9.5px;
+  font-weight: 800;
+  color: var(--rc);
+  text-shadow: 0 0 6px var(--rc);
+}
+.wc-ms-eqnm {
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.2;
+  max-width: 100%;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.wc-ms-eqnm.is-empty { color: var(--dim); font-weight: 500; }
+.wc-ms-eqbtn {
+  appearance: none;
+  margin-top: auto;
+  border: 1px solid rgba(var(--pr), 0.36);
+  background: rgba(var(--pr), 0.1);
+  color: var(--tx);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.wc-ms-eqbtn:hover { background: rgba(var(--pr), 0.28); }
+
+.wc-ms-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+}
+.wc-msit {
+  --rc: rgba(190, 230, 255, 0.48);
+  position: relative;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+  padding: 7px 4px 5px;
+  border: 1px solid var(--rc);
+  border-radius: 4px 12px 4px 12px;
+  background: linear-gradient(160deg, rgba(var(--pr), 0.18), rgba(var(--pr), 0.04));
+  box-shadow: 0 0 10px -3px var(--rc), inset 0 0 12px -5px var(--rc);
+}
+.wc-msit-hit {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  cursor: pointer;
+}
+.wc-msit-i {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  background: center/contain no-repeat url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cpath%20fill%3D%27white%27%20fill-rule%3D%27evenodd%27%20d%3D%27M9%202h6l-1.2%203H16c3%203.2%205%206.8%205%2010.5%200%203.3-2.2%206.5-5.5%206.5h-7C5.2%2022%203%2018.8%203%2015.5%203%2011.8%205%208.2%208%205h2.2z%27%2F%3E%3C%2Fsvg%3E");
+  filter: drop-shadow(0 0 5px rgba(var(--pr), 0.92)) drop-shadow(0 0 1px #fff);
+}
+.wc-msit-i.is-dim { opacity: 0.25; filter: none; }
+[data-t="weapon" i] .wc-msit-i   { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cpath%20fill%3D%27white%27%20fill-rule%3D%27evenodd%27%20d%3D%27M19%202h3v3L11%2016l-3-3zM5.5%2012.5l6%206-1.8%201.8-6-6zM7%2017l-4%204%202%202%204-4z%27%2F%3E%3C%2Fsvg%3E"); }
+[data-t="armor" i] .wc-msit-i    { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cpath%20fill%3D%27white%27%20fill-rule%3D%27evenodd%27%20d%3D%27M12%202l8.5%203v6.2c0%205.2-3.6%209.3-8.5%2010.8C7.1%2020.5%203.5%2016.4%203.5%2011.2V5z%27%2F%3E%3C%2Fsvg%3E"); }
+[data-t="accessory" i] .wc-msit-i{ background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cpath%20fill%3D%27white%27%20fill-rule%3D%27evenodd%27%20d%3D%27M7%203h10l5%206-10%2012L2%209z%27%2F%3E%3C%2Fsvg%3E"); }
+[data-t="potion" i] .wc-msit-i   { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cpath%20fill%3D%27white%27%20fill-rule%3D%27evenodd%27%20d%3D%27M9%202h6v2h-1.2v4.3l4.6%209.1c.8%201.7-.4%203.6-2.3%203.6H7.9c-1.9%200-3.1-1.9-2.3-3.6l4.6-9.1V4H9z%27%2F%3E%3C%2Fsvg%3E"); }
+[data-t="material" i] .wc-msit-i { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cpath%20fill%3D%27white%27%20fill-rule%3D%27evenodd%27%20d%3D%27M20%203C10.5%203%204.5%208%204.5%2015c0%201.9.6%203.5%201.6%205C7.5%2015.5%2010.5%2012%2015%209.5%2011%2012.5%208.5%2016%207.5%2021%2017%2020.5%2020%2012%2020%203z%27%2F%3E%3C%2Fsvg%3E"); }
+[data-t="key" i] .wc-msit-i      { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cpath%20fill%3D%27white%27%20fill-rule%3D%27evenodd%27%20d%3D%27M15.5%202.5a6%206%200%201%200%200%2012%206%206%200%200%200%200-12zm0%203a1.8%201.8%200%201%201%200%203.6%201.8%201.8%200%200%201%200-3.6zM11.3%2013.7l-8.8%208.8V19l1.6-1.6%201.2%201.2%201.3-1.3-1.2-1.2%201.6-1.6%201.3%201.3%201.9-1.9z%27%2F%3E%3C%2Fsvg%3E"); }
+[data-t="book" i] .wc-msit-i     { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cpath%20fill%3D%27white%27%20fill-rule%3D%27evenodd%27%20d%3D%27M5%202h12a3%203%200%200%201%203%203v17H7a3%203%200%200%201-3-3V3a1%201%200%200%201%201-1zm2%203v11h10V5z%27%2F%3E%3C%2Fsvg%3E"); }
+[data-t="valuable" i] .wc-msit-i { background-image: url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2024%2024%27%3E%3Cpath%20fill%3D%27white%27%20fill-rule%3D%27evenodd%27%20d%3D%27M12%202a10%2010%200%201%200%200%2020%2010%2010%200%200%200%200-20zm0%204a6%206%200%201%201%200%2012%206%206%200%200%201%200-12zm0%203a3%203%200%201%200%200%206%203%203%200%200%200%200-6z%27%2F%3E%3C%2Fsvg%3E"); }
+
+.wc-msit-n {
+  max-width: 100%;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.18;
+  text-align: center;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.wc-msit-c {
+  position: absolute;
+  top: 2px;
+  right: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  text-shadow: 0 0 6px var(--a);
+}
+.wc-msit-c::before { content: "\xD7"; }
+.wc-msit-bar {
+  display: flex;
+  gap: 3px;
+  width: 100%;
+  justify-content: center;
+  margin-top: 2px;
+}
+.wc-msit-act {
+  appearance: none;
+  border: 1px solid rgba(var(--pr), 0.35);
+  background: rgba(var(--pr), 0.1);
+  color: var(--tx);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 9.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.wc-msit-act.is-eq { border-color: var(--rc); background: rgba(var(--pr), 0.22); }
+.wc-msit-act:hover { background: rgb(var(--pr)); color: #120c10; }
+
+/* Authentic Weft Rarity Glow Tokens */
+.wc-msit[data-r="common" i], .wc-ms-eqslot[data-r="common" i], .wc-msi[data-r="common" i]       { --rc: #9ca3af; }
+.wc-msit[data-r="uncommon" i], .wc-ms-eqslot[data-r="uncommon" i], .wc-msi[data-r="uncommon" i] { --rc: #34d399; }
+.wc-msit[data-r="rare" i], .wc-ms-eqslot[data-r="rare" i], .wc-msi[data-r="rare" i]             { --rc: #38bdf8; }
+.wc-msit[data-r="epic" i], .wc-ms-eqslot[data-r="epic" i], .wc-msi[data-r="epic" i]             { --rc: #c084fc; }
+.wc-msit[data-r="legendary" i], .wc-ms-eqslot[data-r="legendary" i], .wc-msi[data-r="legendary" i]{ --rc: #facc15; }
+.wc-msit[data-r="mythic" i], .wc-ms-eqslot[data-r="mythic" i], .wc-msi[data-r="mythic" i]       { --rc: #fb7185; }
+
+.wc-msi {
+  --rc: rgba(var(--pr), 0.5);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--rc);
+  background: rgba(var(--pr), 0.08);
+  font-size: 11px;
+  color: var(--tx);
+}
+.wc-msi b { font-weight: 600; }
+.wc-msi em { font-style: normal; font-size: 9.5px; font-weight: 800; color: var(--rc); }
+
+.wc-ms-cash {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  background: linear-gradient(145deg, rgba(250, 204, 21, 0.14), rgba(217, 119, 6, 0.05));
+}
+.wc-ms-cash-k { font-size: 10px; font-weight: 800; letter-spacing: 0.14em; color: #facc15; }
+.wc-ms-cash-v { flex: 1; font-size: 12.5px; font-weight: 700; }
+
+/* Authentic Weft Quest Info Cards (.wc-msq + .wc-mso) */
+.wc-msq-list { display: flex; flex-direction: column; gap: 8px; }
+.wc-msq {
+  padding: 9px 11px;
+  border-radius: 6px;
+  border: 1px solid rgba(var(--pr), 0.36);
+  background: rgba(var(--pr), 0.06);
+}
+.wc-msq[data-s="done" i], .wc-msq[data-s="failed" i] { opacity: 0.78; }
+.wc-msq[data-s="failed" i] { border-color: rgba(251, 113, 133, 0.55); }
+.wc-msq-h { display: flex; flex-wrap: wrap; align-items: center; gap: 5px 6px; margin-bottom: 6px; }
+.wc-msq-t { flex: 1 1 120px; font-size: 13px; letter-spacing: 0.02em; text-shadow: 0 0 8px rgba(var(--pr), 0.5); }
+.wc-msq-k, .wc-msq-s {
+  padding: 1px 7px;
+  border: 1px solid rgba(var(--pr), 0.42);
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.wc-msq[data-s="active" i] .wc-msq-s    { color: #7dd3fc; border-color: #7dd3fc; }
+.wc-msq[data-s="available" i] .wc-msq-s { color: #fcd34d; border-color: #fcd34d; }
+.wc-msq[data-s="done" i] .wc-msq-s      { color: #4ade80; border-color: #4ade80; }
+.wc-msq[data-s="failed" i] .wc-msq-s    { color: #fb7185; border-color: #fb7185; }
+
+.wc-msq-objs { display: flex; flex-direction: column; }
+.wc-mso {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-bottom: 1px dotted rgba(var(--pr), 0.28);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+}
+.wc-mso.is-btn { cursor: pointer; }
+.wc-mso.is-btn:hover { color: var(--a); }
+.wc-mso::after { content: "\u2610"; flex: none; opacity: 0.85; font-size: 13px; }
+.wc-mso[data-x="1"] { opacity: 0.72; }
+.wc-mso[data-x="1"] span { text-decoration: line-through; }
+.wc-mso[data-x="1"]::after { content: "\u2611"; color: #4ade80; text-shadow: 0 0 6px #4ade80; }
+
+.wc-msq-rw, .wc-msq-pn { margin-top: 6px; font-size: 11.5px; }
+.wc-msq-rw::before, .wc-msq-pn::before {
+  font-weight: 800;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-right: 7px;
+}
+.wc-msq-rw::before { content: "REWARD"; color: #4ade80; }
+.wc-msq-pn::before { content: "WARNING"; color: #fb7185; }
+.wc-msq-pn { color: #fda4af; }
+.wc-msq-acts { display: flex; justify-content: flex-end; gap: 5px; margin-top: 7px; }
+
+/* Light Mode adjustments for Inventory Grid & Quest Cards */
+[data-theme-mode="light"] .wc-msit,
+[data-theme-mode="light"] .wc-ms-eqslot,
+[data-theme-mode="light"] .wc-msq {
+  background: rgba(255, 255, 255, 0.86);
+}
+[data-theme-mode="light"] .wc-msit-i {
+  filter: brightness(0.18) drop-shadow(0 0 2px rgba(var(--pr), 0.35));
+}
+[data-theme-mode="light"] .wc-ms-cash {
+  background: rgba(254, 243, 199, 0.9);
+  border-color: rgba(180, 83, 9, 0.45);
+}
+[data-theme-mode="light"] .wc-ms-cash-k { color: #92400e; }
+[data-theme-mode="light"] .wc-msit[data-r="uncommon" i], [data-theme-mode="light"] .wc-ms-eqslot[data-r="uncommon" i], [data-theme-mode="light"] .wc-msi[data-r="uncommon" i] { --rc: #15803d; }
+[data-theme-mode="light"] .wc-msit[data-r="rare" i], [data-theme-mode="light"] .wc-ms-eqslot[data-r="rare" i], [data-theme-mode="light"] .wc-msi[data-r="rare" i]             { --rc: #1d4ed8; }
+[data-theme-mode="light"] .wc-msit[data-r="epic" i], [data-theme-mode="light"] .wc-ms-eqslot[data-r="epic" i], [data-theme-mode="light"] .wc-msi[data-r="epic" i]             { --rc: #7e22ce; }
+[data-theme-mode="light"] .wc-msit[data-r="legendary" i], [data-theme-mode="light"] .wc-ms-eqslot[data-r="legendary" i], [data-theme-mode="light"] .wc-msi[data-r="legendary" i]{ --rc: #b45309; }
+[data-theme-mode="light"] .wc-msit[data-r="mythic" i], [data-theme-mode="light"] .wc-ms-eqslot[data-r="mythic" i], [data-theme-mode="light"] .wc-msi[data-r="mythic" i]       { --rc: #be123c; }
+[data-theme-mode="light"] .wc-msq[data-s="active" i] .wc-msq-s    { color: #0369a1; border-color: #0369a1; }
+[data-theme-mode="light"] .wc-msq[data-s="available" i] .wc-msq-s { color: #b45309; border-color: #b45309; }
+[data-theme-mode="light"] .wc-msq[data-s="done" i] .wc-msq-s      { color: #047857; border-color: #047857; }
+[data-theme-mode="light"] .wc-msq[data-s="failed" i] .wc-msq-s    { color: #be123c; border-color: #be123c; }
+
+/* ============================================================================
    2. AUTHENTIC WEFT SYSTEM NOTIFICATION (.wc-msn)
    ============================================================================ */
 .wc-msn {
@@ -1077,9 +1527,12 @@ var WEFT_CHRONICLE_CSS = `
   display: flex;
   flex-direction: column;
   gap: 7px;
-  margin: 4px 0 6px;
+  margin: 8px 0 2px;
   width: 100%;
   max-width: 100%;
+}
+.wc-inline-wrap.is-after-island {
+  margin-top: -6px;
 }
 .wc-inline-wrap.is-below {
   margin: 6px 0 2px;
@@ -1276,13 +1729,58 @@ function setup(ctx) {
   }
   function resolveInlineTarget(bubbleEl, placement) {
     if (placement === "below") {
-      return { target: bubbleEl, position: "beforeend", padX: null };
+      return { target: bubbleEl, position: "beforeend", padX: null, afterIsland: false };
     }
-    const bodyAfter = bubbleEl.querySelector('[data-spindle-mount="message_body_after"]');
-    if (bodyAfter) {
-      const ownPad = readHorizontalPadding(bodyAfter);
-      const sibPad = !ownPad ? readHorizontalPadding(bodyAfter.previousElementSibling) : null;
-      return { target: bodyAfter, position: "beforeend", padX: sibPad };
+    if (placement === "footer") {
+      const bodyAfter2 = bubbleEl.querySelector('[data-spindle-mount="message_body_after"]');
+      if (bodyAfter2) {
+        const ownPad = readHorizontalPadding(bodyAfter2);
+        const sibPad = !ownPad ? readHorizontalPadding(bodyAfter2.previousElementSibling) : null;
+        return { target: bodyAfter2, position: "beforeend", padX: sibPad, afterIsland: false };
+      }
+      const footer = bubbleEl.querySelector(
+        '[data-spindle-mount="message_footer"], [data-spindle-mount="message_swipe_indicators"]'
+      );
+      if (footer && footer.parentElement && bubbleEl.contains(footer.parentElement)) {
+        return {
+          target: footer,
+          position: "beforebegin",
+          padX: readHorizontalPadding(footer),
+          afterIsland: false
+        };
+      }
+      return { target: bubbleEl, position: "beforeend", padX: null, afterIsland: false };
+    }
+    const nonInjectedChildrenCount = (parent) => Array.from(parent.children).filter(
+      (c) => !c.hasAttribute("data-spindle-injected") && !c.querySelector(".wc-inline-wrap")
+    ).length;
+    const allDescendants = Array.from(bubbleEl.querySelectorAll("*"));
+    const cardsOrIslands = allDescendants.filter(
+      (el) => !isInsideOurInjection(el) && !el.closest('[data-spindle-mount="message_footer"], [data-spindle-mount="message_body_after"]') && (Boolean(el.shadowRoot) || el.matches("details.mg"))
+    );
+    const paragraphs = Array.from(bubbleEl.querySelectorAll("p")).filter(
+      (p) => !isInsideOurInjection(p) && !p.closest("details, blockquote, [data-spindle-mount]")
+    );
+    const lastCard = cardsOrIslands[cardsOrIslands.length - 1] || null;
+    const lastP = paragraphs[paragraphs.length - 1] || null;
+    if (lastCard && (!lastP || Boolean(lastP.compareDocumentPosition(lastCard) & Node.DOCUMENT_POSITION_FOLLOWING))) {
+      let anchor = lastCard;
+      while (anchor.parentElement && anchor.parentElement !== bubbleEl && nonInjectedChildrenCount(anchor.parentElement) === 1) {
+        try {
+          const pcs = window.getComputedStyle(anchor.parentElement);
+          if (parseFloat(pcs.borderBottomWidth) > 0) break;
+        } catch {
+        }
+        anchor = anchor.parentElement;
+      }
+      if (!isHorizontalFlex(anchor.parentElement)) {
+        return {
+          target: anchor,
+          position: "afterend",
+          padX: null,
+          afterIsland: Boolean(lastCard.shadowRoot)
+        };
+      }
     }
     const contentSelectors = [
       "[data-message-content]",
@@ -1293,67 +1791,28 @@ function setup(ctx) {
       ".markdown-body",
       ".prose"
     ];
-    let contentEl = null;
     for (const sel of contentSelectors) {
       const match = Array.from(bubbleEl.querySelectorAll(sel)).find((el) => !isInsideOurInjection(el));
-      if (match) {
-        contentEl = match;
-        break;
-      }
-    }
-    if (contentEl && contentEl !== bubbleEl) {
-      const parent = contentEl.parentElement;
-      if (parent && bubbleEl.contains(parent) && !isHorizontalFlex(parent)) {
-        return {
-          target: contentEl,
-          position: "afterend",
-          padX: readHorizontalPadding(contentEl)
-        };
-      }
-      return { target: contentEl, position: "beforeend", padX: null };
-    }
-    const allDescendants = Array.from(bubbleEl.querySelectorAll("*"));
-    const islands = allDescendants.filter(
-      (el) => Boolean(el.shadowRoot) && !isInsideOurInjection(el)
-    );
-    const paragraphs = Array.from(bubbleEl.querySelectorAll("p")).filter(
-      (p) => !isInsideOurInjection(p) && !p.closest("details, blockquote, [data-spindle-mount]")
-    );
-    const lastIsland = islands[islands.length - 1] || null;
-    const lastP = paragraphs[paragraphs.length - 1] || null;
-    if (lastIsland && (!lastP || Boolean(lastP.compareDocumentPosition(lastIsland) & Node.DOCUMENT_POSITION_FOLLOWING))) {
-      let anchor = lastIsland;
-      while (anchor.parentElement && anchor.parentElement !== bubbleEl && anchor.parentElement.children.length === 1) {
-        anchor = anchor.parentElement;
-      }
-      if (!isHorizontalFlex(anchor.parentElement)) {
-        return { target: anchor, position: "afterend", padX: readHorizontalPadding(anchor) };
+      if (match && match !== bubbleEl) {
+        return { target: match, position: "beforeend", padX: null, afterIsland: false };
       }
     }
     if (lastP && lastP.parentElement && bubbleEl.contains(lastP.parentElement)) {
       const pParent = lastP.parentElement;
-      if (pParent !== bubbleEl && !isHorizontalFlex(pParent.parentElement)) {
-        return {
-          target: pParent,
-          position: "afterend",
-          padX: readHorizontalPadding(pParent)
-        };
+      if (pParent !== bubbleEl) {
+        return { target: pParent, position: "beforeend", padX: null, afterIsland: false };
       }
-      return { target: pParent, position: "beforeend", padX: null };
+      return { target: lastP, position: "afterend", padX: null, afterIsland: false };
     }
-    const footer = bubbleEl.querySelector(
-      '[data-spindle-mount="message_footer"], [data-spindle-mount="message_swipe_indicators"]'
-    );
-    if (footer && footer.parentElement && bubbleEl.contains(footer.parentElement)) {
-      return {
-        target: footer,
-        position: "beforebegin",
-        padX: readHorizontalPadding(footer)
-      };
+    const bodyAfter = bubbleEl.querySelector('[data-spindle-mount="message_body_after"]');
+    if (bodyAfter) {
+      const ownPad = readHorizontalPadding(bodyAfter);
+      const sibPad = !ownPad ? readHorizontalPadding(bodyAfter.previousElementSibling) : null;
+      return { target: bodyAfter, position: "beforeend", padX: sibPad, afterIsland: false };
     }
-    return { target: bubbleEl, position: "beforeend", padX: null };
+    return { target: bubbleEl, position: "beforeend", padX: null, afterIsland: false };
   }
-  function buildInlineHtml(d, cfg, snap, padX) {
+  function buildInlineHtml(d, cfg, snap, padX, afterIsland) {
     const parts = [];
     const sysTh = resolveSystemTheme(cfg);
     if (d.modules.dice && cfg.showInlineDice && Array.isArray(snap.rolls) && snap.rolls.length > 0) {
@@ -1373,9 +1832,12 @@ function setup(ctx) {
       parts.push(renderTrackerCard(snap.world, cfg, { mode: "inline", open: cfg.inlineStartsOpen }));
     }
     if (parts.length === 0) return "";
-    const belowCls = cfg.inlinePlacement === "below" ? " is-below" : "";
+    const extraCls = [
+      cfg.inlinePlacement === "below" ? "is-below" : "",
+      afterIsland ? "is-after-island" : ""
+    ].filter(Boolean).join(" ");
     const padStyle = padX ? ` style="padding-left:${esc(padX.left)};padding-right:${esc(padX.right)};"` : "";
-    return `<div class="wc-inline-wrap${belowCls}" data-wc-theme="${esc(cfg.theme)}"${padStyle}>${parts.join("")}</div>`;
+    return `<div class="wc-inline-wrap${extraCls ? " " + extraCls : ""}" data-wc-theme="${esc(cfg.theme)}"${padStyle}>${parts.join("")}</div>`;
   }
   function syncInlineChatCards() {
     if (!data || !settings || !data.enabled || !data.initialized) {
@@ -1390,7 +1852,7 @@ function setup(ctx) {
     const activeIds = /* @__PURE__ */ new Set();
     const latestSnapKey = data.lastSyncedKey;
     const latestSnap = latestSnapKey ? data.snapshots[latestSnapKey] : null;
-    const placement = settings.inlinePlacement === "below" ? "below" : "inside";
+    const placement = settings.inlinePlacement === "below" || settings.inlinePlacement === "footer" ? settings.inlinePlacement : "inside";
     let mounted = [];
     try {
       mounted = ctx.dom.listMessageElements();
@@ -1402,7 +1864,7 @@ function setup(ctx) {
       if (!snap) continue;
       const effectiveSnap = latestSnap && snap.messageId === latestSnap.messageId ? { ...snap, sheet: data.sheet, world: data.world } : snap;
       const resolved = resolveInlineTarget(item.element, placement);
-      const html = buildInlineHtml(data, settings, effectiveSnap, resolved.padX);
+      const html = buildInlineHtml(data, settings, effectiveSnap, resolved.padX, resolved.afterIsland);
       if (!html) continue;
       activeIds.add(item.messageId);
       const existing = injectedWrappers.get(item.messageId);
@@ -1595,64 +2057,90 @@ function setup(ctx) {
       modal.dismiss();
     });
   }
-  function openAddItemModal() {
-    const modal = ctx.ui.showModal({ title: "Add Item to Inventory", width: 400 });
+  function openItemModal(existing) {
+    const modal = ctx.ui.showModal({
+      title: existing ? `Inspect / Edit Item` : "Add Item to Inventory",
+      width: 400
+    });
+    const cats = [
+      ["misc", "Misc"],
+      ["weapon", "Weapon"],
+      ["armor", "Armor"],
+      ["accessory", "Accessory"],
+      ["potion", "Potion / Meds"],
+      ["material", "Material / Ammo"],
+      ["key", "Key Item"],
+      ["book", "Book / Note"],
+      ["valuable", "Valuable"]
+    ];
+    const rars = [
+      ["ordinary", "Ordinary (+0)"],
+      ["common", "Common (+0)"],
+      ["uncommon", "Uncommon (+1)"],
+      ["rare", "Rare (+1)"],
+      ["epic", "Epic (+2)"],
+      ["legendary", "Legendary (+3)"],
+      ["mythic", "Mythic (+3)"]
+    ];
+    const curCat = existing?.category || "misc";
+    const curRar = existing?.rarity || "ordinary";
+    const canEquip = curCat === "weapon" || curCat === "armor" || curCat === "accessory";
     modal.root.innerHTML = `
       <div class="wc-modal">
-        <div class="wc-field"><label>Item Name</label><input class="wc-input" id="wc-it-name" placeholder="e.g., Crowbar, First-Aid Kit, Iron Sword" /></div>
+        <div class="wc-field"><label>Item Name</label><input class="wc-input" id="wc-it-name" placeholder="e.g., Crowbar, First-Aid Kit, Iron Sword" value="${esc(existing?.name || "")}" /></div>
         <div class="wc-row-2">
           <div class="wc-field">
             <label>Category</label>
             <select class="wc-select" id="wc-it-cat">
-              <option value="misc">Misc</option>
-              <option value="weapon">Weapon</option>
-              <option value="armor">Armor</option>
-              <option value="accessory">Accessory</option>
-              <option value="potion">Potion / Meds</option>
-              <option value="material">Material / Ammo</option>
-              <option value="key">Key Item</option>
-              <option value="book">Book / Note</option>
-              <option value="valuable">Valuable</option>
+              ${cats.map(([v, lbl]) => `<option value="${v}" ${curCat === v ? "selected" : ""}>${lbl}</option>`).join("")}
             </select>
           </div>
           <div class="wc-field">
             <label>Rarity</label>
             <select class="wc-select" id="wc-it-rar">
-              <option value="ordinary">Ordinary (+0)</option>
-              <option value="common">Common (+0)</option>
-              <option value="uncommon">Uncommon (+1)</option>
-              <option value="rare">Rare (+1)</option>
-              <option value="epic">Epic (+2)</option>
-              <option value="legendary">Legendary (+3)</option>
-              <option value="mythic">Mythic (+3)</option>
+              ${rars.map(([v, lbl]) => `<option value="${v}" ${curRar === v ? "selected" : ""}>${lbl}</option>`).join("")}
             </select>
           </div>
         </div>
         <div class="wc-row-2">
-          <div class="wc-field"><label>Quantity</label><input class="wc-input" id="wc-it-qty" type="number" min="1" value="1" /></div>
-          <label class="wc-toggle-row" style="align-self:end"><span>Equip immediately</span><input type="checkbox" id="wc-it-eq" /></label>
+          <div class="wc-field"><label>Quantity</label><input class="wc-input" id="wc-it-qty" type="number" min="1" value="${existing?.qty ?? 1}" /></div>
+          <label class="wc-toggle-row" style="align-self:end"><span>${existing ? "Equip now" : "Equip immediately"}</span><input type="checkbox" id="wc-it-eq" ${existing && !canEquip ? "disabled" : ""} /></label>
         </div>
-        <div class="wc-field"><label>Note (optional)</label><input class="wc-input" id="wc-it-note" placeholder="Short effect or condition" /></div>
+        <div class="wc-field"><label>Note / Effect</label><textarea class="wc-textarea" id="wc-it-note" rows="2" placeholder="Short effect, lore, or condition">${esc(existing?.note || "")}</textarea></div>
         <div class="wc-modal-foot">
+          ${existing ? `<button class="wc-btn is-danger" id="wc-it-del" style="margin-right:auto">Remove All</button>` : ""}
           <button class="wc-btn" id="wc-it-cancel">Cancel</button>
-          <button class="wc-btn is-primary" id="wc-it-save">Add Item</button>
+          <button class="wc-btn is-primary" id="wc-it-save">${existing ? "Save Item" : "Add Item"}</button>
         </div>
       </div>
     `;
+    const catSel = modal.root.querySelector("#wc-it-cat");
+    const eqCb = modal.root.querySelector("#wc-it-eq");
+    catSel?.addEventListener("change", () => {
+      if (!eqCb) return;
+      const v = catSel.value;
+      const eq = v === "weapon" || v === "armor" || v === "accessory";
+      eqCb.disabled = !eq;
+      if (!eq) eqCb.checked = false;
+    });
+    modal.root.querySelector("#wc-it-del")?.addEventListener("click", () => {
+      if (existing) send("remove_item", { id: existing.id, qty: existing.qty });
+      modal.dismiss();
+    });
     modal.root.querySelector("#wc-it-cancel")?.addEventListener("click", () => modal.dismiss());
     modal.root.querySelector("#wc-it-save")?.addEventListener("click", () => {
       const name = modal.root.querySelector("#wc-it-name")?.value.trim();
       if (!name) return;
-      send("add_item", {
-        item: {
-          name,
-          category: modal.root.querySelector("#wc-it-cat")?.value,
-          rarity: modal.root.querySelector("#wc-it-rar")?.value,
-          qty: Number(modal.root.querySelector("#wc-it-qty")?.value || 1),
-          note: modal.root.querySelector("#wc-it-note")?.value.trim() || "",
-          equip: modal.root.querySelector("#wc-it-eq")?.checked ?? false
-        }
-      });
+      const payload = {
+        id: existing?.id,
+        name,
+        category: modal.root.querySelector("#wc-it-cat")?.value,
+        rarity: modal.root.querySelector("#wc-it-rar")?.value,
+        qty: Number(modal.root.querySelector("#wc-it-qty")?.value || 1),
+        note: modal.root.querySelector("#wc-it-note")?.value.trim() || "",
+        equip: modal.root.querySelector("#wc-it-eq")?.checked ?? false
+      };
+      send(existing ? "update_item" : "add_item", { item: payload });
       modal.dismiss();
     });
   }
@@ -1667,7 +2155,10 @@ function setup(ctx) {
           <div class="wc-field"><label>Status</label><select class="wc-select" id="wc-q-status"><option value="active" ${!existing || existing.status === "active" ? "selected" : ""}>Active</option><option value="available" ${existing?.status === "available" ? "selected" : ""}>Available</option><option value="done" ${existing?.status === "done" ? "selected" : ""}>Done</option><option value="failed" ${existing?.status === "failed" ? "selected" : ""}>Failed</option></select></div>
         </div>
         <div class="wc-field"><label>Objectives (one per line; prefix "[x] " if done)</label><textarea class="wc-textarea" id="wc-q-obs" rows="3">${esc(obsText)}</textarea></div>
-        <div class="wc-field"><label>Reward (optional)</label><input class="wc-input" id="wc-q-rew" value="${esc(existing?.reward || "")}" /></div>
+        <div class="wc-row-2">
+          <div class="wc-field"><label>Reward (optional)</label><input class="wc-input" id="wc-q-rew" value="${esc(existing?.reward || "")}" /></div>
+          <div class="wc-field"><label>Warning / Penalty</label><input class="wc-input" id="wc-q-pen" value="${esc(existing?.penalty || "")}" /></div>
+        </div>
         <div class="wc-modal-foot"><button class="wc-btn" id="wc-q-cancel">Cancel</button><button class="wc-btn is-primary" id="wc-q-save">Save Quest</button></div>
       </div>
     `;
@@ -1688,7 +2179,8 @@ function setup(ctx) {
           kind: modal.root.querySelector("#wc-q-kind")?.value,
           status: modal.root.querySelector("#wc-q-status")?.value,
           objectives,
-          reward: modal.root.querySelector("#wc-q-rew")?.value.trim() || ""
+          reward: modal.root.querySelector("#wc-q-rew")?.value.trim() || "",
+          penalty: modal.root.querySelector("#wc-q-pen")?.value.trim() || ""
         }
       });
       modal.dismiss();
@@ -1934,109 +2426,17 @@ function setup(ctx) {
       ${renderSystemWindow(d.sheet, cfg, { mode: "drawer" })}
     `;
   }
-  function renderGearTab(d) {
+  function renderGearTab(d, cfg) {
     if (!d.modules.system) {
       return renderModuleDisabledCard(
         "system",
-        "System Window (Gear & Quests)",
-        "Turn the System module ON to manage equipped gear, bag items, and quests."
+        "System Window (Inventory & Quests)",
+        "Turn the System module ON to manage equipped gear, pack items, and quests."
       );
     }
-    const s = d.sheet;
-    const slots = [
-      { key: "weapon", label: "Weapon" },
-      { key: "armor", label: "Armor" },
-      { key: "accessory", label: "Accessory" }
-    ];
-    const maxBonus = computeMaxGearBonus(s);
     return `
-      <div class="wc-card">
-        <div class="wc-card-head">
-          <span class="wc-card-title">Equipped Gear</span>
-          <span class="wc-pill">Max Roll Bonus +${maxBonus}</span>
-        </div>
-        <div class="wc-list">
-          ${slots.map(({ key, label }) => {
-      const it = s.gear[key];
-      if (!it) {
-        return `<div class="wc-item-row"><div class="wc-item-main"><span class="wc-dim">${label}: Empty</span></div></div>`;
-      }
-      const rb = typeof it.rollBonus === "number" ? it.rollBonus : rarityRollBonus(it.rarity);
-      return `
-                <div class="wc-item-row">
-                  <div class="wc-item-main">
-                    <div class="wc-item-name">
-                      <span class="wc-dim">${label}:</span>
-                      <span class="wc-rarity-${esc(it.rarity)}">${esc(it.name)}</span>
-                      ${rb > 0 ? `<span class="wc-pill">+${rb}</span>` : ""}
-                    </div>
-                    ${it.note ? `<div class="wc-item-sub">${esc(it.note)}</div>` : ""}
-                  </div>
-                  <button class="wc-btn is-xs" data-act="unequip" data-slot="${key}">Unequip</button>
-                </div>
-              `;
-    }).join("")}
-        </div>
-      </div>
-
-      <div class="wc-card">
-        <div class="wc-card-head">
-          <span class="wc-card-title">Bag (${s.bag.length}/24)${s.cash ? ` \xB7 ${esc(s.cash)}` : ""}</span>
-          <button class="wc-btn is-xs is-primary" data-act="add_item">+ Item</button>
-        </div>
-        ${s.bag.length > 0 ? `<div class="wc-list">${s.bag.map((it) => {
-      const canEquip = it.category === "weapon" || it.category === "armor" || it.category === "accessory";
-      return `
-                    <div class="wc-item-row">
-                      <div class="wc-item-main">
-                        <div class="wc-item-name">
-                          <span class="wc-rarity-${esc(it.rarity)}">${esc(it.name)}</span>
-                          ${it.qty > 1 ? `<span class="wc-pill is-muted">\xD7${it.qty}</span>` : ""}
-                          ${it.rarity !== "ordinary" ? `<span class="wc-dim">${esc(it.rarity)}</span>` : ""}
-                        </div>
-                        ${it.note ? `<div class="wc-item-sub">${esc(it.note)}</div>` : ""}
-                      </div>
-                      <div class="wc-actions-row">
-                        ${canEquip ? `<button class="wc-btn is-xs" data-act="equip" data-id="${esc(it.id)}">Equip</button>` : ""}
-                        <button class="wc-btn is-xs" data-act="rm_item" data-id="${esc(it.id)}">-1</button>
-                      </div>
-                    </div>
-                  `;
-    }).join("")}</div>` : `<div class="wc-dim">Bag is empty.</div>`}
-      </div>
-
-      <div class="wc-card">
-        <div class="wc-card-head">
-          <span class="wc-card-title">Quests (${s.quests.length}/8)</span>
-          <button class="wc-btn is-xs is-primary" data-act="add_quest">+ Quest</button>
-        </div>
-        ${s.quests.length > 0 ? `<div class="wc-list">${s.quests.map((q) => {
-      const statusCls = q.status === "done" ? "is-good" : q.status === "failed" ? "is-bad" : q.status === "active" ? "" : "is-muted";
-      return `
-                    <div class="wc-item-row" style="flex-direction:column; align-items:stretch; gap:5px;">
-                      <div class="wc-card-head">
-                        <div class="wc-item-name">
-                          <span class="wc-pill ${statusCls}">${esc(q.status)}</span>
-                          <span>${esc(q.title)}</span>
-                        </div>
-                        <div class="wc-actions-row">
-                          <button class="wc-btn is-xs" data-act="edit_quest" data-id="${esc(q.id)}">Edit</button>
-                          <button class="wc-btn is-xs" data-act="rm_quest" data-id="${esc(q.id)}">\xD7</button>
-                        </div>
-                      </div>
-                      ${q.objectives.map(
-        (o) => `
-                            <label class="wc-obj ${o.done ? "is-done" : ""}">
-                              <input type="checkbox" data-act="toggle_obj" data-qid="${esc(q.id)}" data-oid="${esc(o.id)}" ${o.done ? "checked" : ""} />
-                              <span>${esc(o.text)}</span>
-                            </label>
-                          `
-      ).join("")}
-                      ${q.reward ? `<div class="wc-dim">Reward: ${esc(q.reward)}</div>` : ""}
-                    </div>
-                  `;
-    }).join("")}</div>` : `<div class="wc-dim">No active quests tracked.</div>`}
-      </div>
+      ${renderInventoryWindow(d.sheet, cfg)}
+      ${renderQuestWindow(d.sheet, cfg)}
     `;
   }
   function renderTrackerTab(d, cfg) {
@@ -2145,7 +2545,8 @@ function setup(ctx) {
         <div class="wc-field">
           <label>Card Placement</label>
           <select class="wc-select" id="wc-cfg-placement">
-            <option value="inside" ${cfg.inlinePlacement !== "below" ? "selected" : ""}>Inside message card (above swipe bar)</option>
+            <option value="inside" ${cfg.inlinePlacement !== "below" && cfg.inlinePlacement !== "footer" ? "selected" : ""}>Inside message body (with What Now?)</option>
+            <option value="footer" ${cfg.inlinePlacement === "footer" ? "selected" : ""}>Message footer (below divider, above swipe)</option>
             <option value="below" ${cfg.inlinePlacement === "below" ? "selected" : ""}>Below message card</option>
           </select>
         </div>
@@ -2244,7 +2645,7 @@ function setup(ctx) {
       return;
     }
     const pendingRolls = data.modules.dice ? data.rolls.filter((r) => !r.consumed).length : 0;
-    const body = activeSubTab === "system" ? renderSystemTab(data, settings) : activeSubTab === "gear" ? renderGearTab(data) : activeSubTab === "tracker" ? renderTrackerTab(data, settings) : activeSubTab === "dice" ? renderDiceTab(data, settings) : renderSettingsContent(data, settings);
+    const body = activeSubTab === "system" ? renderSystemTab(data, settings) : activeSubTab === "gear" ? renderGearTab(data, settings) : activeSubTab === "tracker" ? renderTrackerTab(data, settings) : activeSubTab === "dice" ? renderDiceTab(data, settings) : renderSettingsContent(data, settings);
     drawerTab.root.innerHTML = `
       <div class="wc-root" data-wc-theme="${esc(theme)}">
         <div class="wc-topbar">
@@ -2349,7 +2750,12 @@ function setup(ctx) {
         return;
       }
       case "add_item": {
-        openAddItemModal();
+        openItemModal();
+        return;
+      }
+      case "edit_item": {
+        const it = data?.sheet.bag.find((x) => x.id === target.dataset.id);
+        if (it) openItemModal(it);
         return;
       }
       case "equip": {
@@ -2366,6 +2772,17 @@ function setup(ctx) {
       }
       case "add_quest": {
         openQuestModal();
+        return;
+      }
+      case "toggle_obj_btn": {
+        send("toggle_objective", { questId: target.dataset.qid, objectiveId: target.dataset.oid });
+        return;
+      }
+      case "cycle_quest_status": {
+        const q = data?.sheet.quests.find((x) => x.id === target.dataset.id);
+        if (!q) return;
+        const nextStatus = q.status === "available" ? "active" : q.status === "active" ? "done" : "active";
+        send("upsert_quest", { quest: { ...q, status: nextStatus } });
         return;
       }
       case "edit_quest": {

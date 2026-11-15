@@ -1886,6 +1886,26 @@ spindle.onFrontendMessage(async (rawPayload, userId, frontendSessionId) => {
         await pushStateToFrontend(activeChatId, userId);
         return;
       }
+      case "update_item": {
+        if (!activeChatId) return;
+        const item = msg.item || {};
+        if (!item.id || !item.name?.trim()) return;
+        const data = await loadChatData(activeChatId, userId);
+        const existing = data.sheet.bag.find((x) => x.id === item.id);
+        if (!existing) return;
+        existing.name = item.name.trim();
+        if (item.category) existing.category = item.category;
+        if (item.rarity) existing.rarity = item.rarity;
+        if (typeof item.qty === "number" && Number.isFinite(item.qty)) {
+          existing.qty = clamp(item.qty, 1, 9999);
+        }
+        if (item.note !== void 0) existing.note = item.note.trim();
+        if (item.equip) equipItem(data.sheet, existing.id);
+        refreshLatestSnapshot(data);
+        await saveChatData(data, userId);
+        await pushStateToFrontend(activeChatId, userId);
+        return;
+      }
       case "remove_item": {
         if (!activeChatId) return;
         const id = String(msg.id || "");
